@@ -1,7 +1,5 @@
 
 C0 = 0  -- прозрачный цвет
--- COLORS1 = {bit = '000000', Milk = '302387', Green = '46878f'}
--- COLORS2 = {bit = 'ffffff', Milk = 'fffdaf', Green = '94e344'}
 
 
 --  блок со сменой цвета палитры
@@ -12,7 +10,6 @@ function exportpal(pal)
         poke4((eADDR*2)+64+#pal-i,tonumber(pal:sub(i,i),16))
     end 
 end
-
 function savePalette()
     palette = ""
     for i=0, 15 do
@@ -21,7 +18,6 @@ function savePalette()
         end
     end
 end
-
 function colorChange(pn)
     -- pn: palette number
     local id = 0  -- id цвета
@@ -38,6 +34,27 @@ function colorChange(pn)
     exportpal(palette)
 end
 --
+
+
+function sq_distance(x1, y1, x2, y2)
+    -- возвращает квадрат расстояния между точками
+    return math.abs(x1 - x2)^2 + math.abs(y1 - y2)^2
+end
+
+
+function sq_point_ortsegment_distance(x, y, x1, y1, x2, y2)
+    -- отрезок ортогональный
+    if (x == x1 and x == x2) or (y == y1 and y == y2) then
+        return 0
+    end
+    if x1 <= x and x <= x2 then
+        return math.min(sq_distance(x, y, x1, y1), sq_distance(x, y, x2, y2), sq_distance(x, y, x, y1))
+    end
+    if y1 <= y and y <= y2 then
+        return math.min(sq_distance(x, y, x1, y1), sq_distance(x, y, x2, y2), sq_distance(x, y, x1, y))
+    end
+    return math.min(sq_distance(x, y, x1, y1), sq_distance(x, y, x2, y2))
+end
 
 
 function fence(x, left, right)
@@ -74,6 +91,31 @@ function plr_death_anim()
         table.insert(res, 279)
     end
     return res
+end
+
+function boss_opening_mouth_anim()
+    res = {}
+    for _, f in ipairs({384, 388, 392}) do
+        for i = 1, 10 do
+            table.insert(res, f)
+        end
+    end
+    return res
+end
+
+function boss_beard_anim()
+    return animation_generation({
+        {1, 2, 3, 4, 5},
+        {1, 2, 3, 4, 5},
+        {-1, 2, 3, 4, 5},
+        {-1, 2, 3, 4, 5},
+        {-1, -2, -3, 4, 5},
+        {-1, -2, -3, 4, 5},
+        {1, -2, -3, -4, -5},
+        {1, -2, -3, -4, -5},
+        {1, 2, 3, -4, -5},
+        {1, 2, 3, -4, -5}
+    })
 end
 
 
@@ -129,6 +171,53 @@ function Hitbox:set_xy(x, y)
     self.x1 = x; self.y1 = y
     self.x2 = self.x2 + dx
     self.y2 = self.y2 + dy
+end
+--
+
+
+-- Не имеет ничего общего с Hitbox кроме принципа работы
+HitCircle = table.shallow_copy(Hitbox)
+function HitCircle:new(x, y, d)
+    obj = {
+        x = x, y = y,  -- left top pixel
+        d = d,  -- diameter
+        hb = Hitbox:new(x, y, x+d, y+d)  -- для упрощения расчетов
+    }
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function HitCircle:collide(hb)
+    if not self.hb:collide(hb) then
+        return false
+    end
+    local d = self.d
+    -- is center in hb
+    if hb.x1 <= self.x + d/2 and self.x + d/2 <= hb.x2 and
+            hb.y1 <= self.y + d/2 and self.y + d/2 <= hb.y2 then
+        return true
+    end
+    -- is hb side collide circle
+    if sq_point_ortsegment_distance(self.x + d/2, self.y + d/2, hb.x1, hb.y1, hb.x1, hb.y2) <= d^2 / 4 then
+        return true
+    end
+    if sq_point_ortsegment_distance(self.x + d/2, self.y + d/2, hb.x2, hb.y1, hb.x2, hb.y2) <= d^2 / 4 then
+        return true
+    end
+    if sq_point_ortsegment_distance(self.x + d/2, self.y + d/2, hb.x1, hb.y1, hb.x2, hb.y1) <= d^2 / 4 then
+        return true
+    end
+    if sq_point_ortsegment_distance(self.x + d/2, self.y + d/2, hb.x1, hb.y2, hb.x2, hb.y2) <= d^2 / 4 then
+        return true
+    end
+    return false
+end
+
+function HitCircle:set_xy(x, y)
+    self.x = x
+    self.y = y
+    self.hb:set_xy(x, y)
 end
 --
 
@@ -208,15 +297,15 @@ end
 
 --
 Player = table.shallow_copy(Body)
-PLAYER_STAY_A = Sprite:new(animation_generation({257}), 1)
-PLAYER_RUN_A = Sprite:new(animation_generation({256, 257, 258, 259, 256, 257, 258, 259, 256, 257, 258, 259}), 1)
-PLAYER_DEATH_A = Sprite:new(animation_generation(plr_death_anim()), 1)
-PLAYER_BORN_A = Sprite:new(table.reverse(animation_generation(plr_death_anim())), 1)
-PLAYER_HAT_A = Sprite:new(animation_generation({279}), 1)
+Player.stay_a = Sprite:new(animation_generation({257}), 1)
+Player.run_a = Sprite:new(animation_generation({256, 257, 258, 259, 256, 257, 258, 259, 256, 257, 258, 259}), 1)
+Player.death_a = Sprite:new(animation_generation(plr_death_anim()), 1)
+Player.born_a = Sprite:new(table.reverse(animation_generation(plr_death_anim())), 1)
+Player.hat_a = Sprite:new(animation_generation({279}), 1)
 
 function Player:new(x, y)
     obj = {
-        sprite = PLAYER_BORN_A:copy(),
+        sprite = Player.born_a:copy(),
         start_x = x, start_y = y,
         x = x, y = y,
         last_dx = 1, last_dy = 0,
@@ -239,7 +328,7 @@ function Player:update()
     end
     if self.born_flag then
         if not self:born_update() then  -- если рождение закончилось
-            self.sprite = PLAYER_STAY_A:copy()
+            self.sprite = Player.stay_a:copy()
         end
         return
     end
@@ -271,10 +360,10 @@ function Player:update()
     if math.abs(self.dx) + math.abs(self.dy) ~= 0 then  -- is moving
         self.last_dx = self.dx; self.last_dy = self.dy
         if not flag then
-            self.sprite = PLAYER_RUN_A:copy()
+            self.sprite = Player.run_a:copy()
         end
     else
-        self.sprite = PLAYER_STAY_A:copy()
+        self.sprite = Player.stay_a:copy()
     end
 
     if self.dx == -1 then
@@ -309,14 +398,14 @@ end
 function Player:death_update()
     self.sprite:next_frame()
     if self.sprite.frame == 60 then
-        self.sprite = PLAYER_HAT_A:copy()
+        self.sprite = Player.hat_a:copy()
     end
     self:draw()
 end
 
 function Player:death()
     -- self.dead = true
-    self.sprite = PLAYER_DEATH_A:copy()
+    self.sprite = Player.death_a:copy()
 end
 
 function Player:set_start_stats()
@@ -324,9 +413,9 @@ function Player:set_start_stats()
     self.boomerang = false
     self.x = self.start_x
     self.y = self.start_y
-    self.sprite = PLAYER_BORN_A:copy()
+    self.sprite = Player.born_a:copy()
     self.born_flag = true
-    hitbox = Hitbox:new(self.x+2, self.y+1, self.x+5, self.y+7)
+    self.hitbox = Hitbox:new(self.x+2, self.y+1, self.x+5, self.y+7)
 end
 --
 
@@ -398,7 +487,7 @@ end
 --
 Enemy = table.shallow_copy(Body)
 Enemy.stay_a = Sprite:new(animation_generation({261}), 1)
-Enemy.suffer_a = Sprite:new(animation_generation({262, 261, 262, 261, 262, 261, 262, 261, 262, 261, 262, 261}), 1)
+Enemy.suffer_a = Sprite:new(animation_generation({262, 263, 262, 263, 262, 263, 262, 263, 262, 263, 262, 263}), 1)
 Enemy.death_a = Sprite:new(animation_generation({288, 289, 290, 291, 292, 293}), 1)
 Enemy.born_a = Sprite:new(table.reverse(animation_generation({288, 289, 290, 291, 292, 293})), 1)
 function Enemy:new(x, y)
@@ -406,10 +495,10 @@ function Enemy:new(x, y)
         sprite = Enemy.born_a:copy(),
         x = x, y = y, hp = 20,
         px = 0, py = 0,  -- положение игрока
-        flip = 0, -- направление при отрисовке спрайта
+        flip = math.random(0, 1), -- направление при отрисовке спрайта
         charge = 0,  -- заряд выстрела
-        hitbox = Hitbox:new(x+1, y+1, x+6, y+7),
-        hp = 20, born_flag = true
+        hitbox = Hitbox:new(x+1, y+1, x+5, y+6),
+        hp = 20, born_flag = true, death_flag = true
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -423,7 +512,8 @@ function Enemy:update()
         end
         return
     end
-    if self:is_dead() and table.contains(self.sprite.animation, 261) then
+    if self:is_dead() and self.death_flag then
+        self.death_flag = false
         self.sprite = Enemy.death_a:copy()
     end
     self.sprite:next_frame()
@@ -490,19 +580,230 @@ end
 
 --
 Boss = table.shallow_copy(Enemy)
+Boss.default_a = Sprite:new({452}, 4)
+Boss.opening_mouth_a = Sprite:new(boss_opening_mouth_anim(), 4)
+Boss.suffer_a = Sprite:new(animation_generation({456, 460, 456, 460, 456, 460, 456, 460, 456, 460, 456, 460}), 4)
+Boss.right_beard = {
+    {x = 13, y = 18},
+    {x = 14, y = 17},
+    {x = 15, y = 16},
+    {x = 16, y = 15},
+    {x = 17, y = 14}
+}
+Boss.left_beard = {
+    {x = 10, y = 18},
+    {x = 9, y = 17},
+    {x = 8, y = 16},
+    {x = 7, y = 15},
+    {x = 6, y = 13}
+}
+Boss.beard_a = boss_beard_anim()
+Boss.pixel = Sprite:new({269}, 1)
 
-function Boss:new()
+function Boss:new(x, y)
+    obj = {
+        sprite = Boss.default_a,
+        x = x, y = y, v = 0.5,
+        beard_frame = 1,
+        hair_cnt = 0, hair_y = {0, 0, 0, 0, 0},
+        hitbox = Hitbox:new(x+4, y+4, x+19, y+14),
+        px = 0, py = 0, hp = 100
+    }
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function Boss:update()
+    -- moving
+    if self.y <= 1 or self.y+18 >= 136-1 then
+        self.v = -self.v
+    end
+    self.y = self.y + self.v
+    self.hitbox:set_xy(self.x, self.y)
+    -- hair animation
+    self.hair_cnt = self.hair_cnt + 1
+    if self.hair_cnt == 6 then
+        self.hair_cnt = 0
+        for i = 1, 5 do
+            self.hair_y[i] = math.random(0, 1)
+        end
+    end
+    for i = 0, 4 do
+        if self.v > 0 then
+            Boss.pixel:draw(self.x + i*4, self.y + self.hair_y[i+1], 0)
+        else
+            Boss.pixel:draw(self.x + i*4, self.y + self.hair_y[i+1] + 1, 0)
+        end
+    end
+    -- beard animation
+    self.beard_frame = (self.beard_frame + 1) % #Boss.beard_a + 1
+    for _, i in ipairs(Boss.beard_a[self.beard_frame]) do
+        if i < 0 then
+            Boss.pixel:draw(self.x + Boss.left_beard[-i].x, self.y + Boss.left_beard[-i].y, 0)
+        else
+            Boss.pixel:draw(self.x + Boss.right_beard[i].x, self.y + Boss.right_beard[i].y, 0)
+        end
+    end
+    -- drawing
+    self.sprite:next_frame()
+    self:draw()
+end
+
+function Boss:suffer()
+    if self:is_dead() then
+        return
+    end
+    self:take_damage(1)
+    -- if not (already suffer)
+    if not table.contains(self.sprite.animation, 460) then
+        self.sprite = Boss.suffer_a:copy()
+    end
+end
+
+function Boss:chill()
+    if table.contains(self.sprite.animation, 460) then
+        self.sprite = Boss.default_a:copy()
+    end
+end
+
+function Boss:shoot()
     -- body
 end
 --
 
 
 --
+Bomb = table.shallow_copy(Enemy)
+Bomb.flight_a = Sprite:new({267}, 1)
+Bomb.detonate_a = Sprite:new(animation_generation({268, 267, 268, 267, 268, 267, 268, 267, 268, 267, 268, 267}), 1)
+Bomb.boom_a = Sprite:new({304}, 4)
+Bomb.vanish_a = Sprite:new(animation_generation({308, 312, 316}), 4)
+function Bomb:new(x, y, fx, fy)
+    obj = {
+        sprite = Bomb.flight_a:copy(),
+        x = x, y = y,
+        detonate_charge = 0,
+        mode = 'flight',
+        hitbox = Hitbox:new(x, y, x+2, y+2),
+        hitcircle = HitCircle:new(x-10, y-10, 25),
+        fx = fx, fy = fy, v = 1,
+        dx = 0, dy = 0,
+        plr_hitbox = Hitbox:new(2, 1, 5, 7),
+        hp = 1
+    }
+    if fx == x then
+        fx = fx + 0.0000001
+    end
+    d = math.abs(fy - y) / math.abs(fx - x)
+    dx = obj['v'] / math.sqrt(1 + d*d)
+    dy = dx * d
+
+    kx = 1; ky = 1
+    if fx < x then
+        kx = -1
+    end
+    if fy < y then
+        ky = -1
+    end
+    obj['dx'] = kx * dx
+    obj['dy'] = ky * dy
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function Bomb:update()
+    if self.mode == 'flight' then
+        self:flight_update()
+        return
+    end
+    if self.mode == 'chill' then
+        self:chill_update()
+        return
+    end
+    if self.mode == 'detonate' then
+        self:detonate_update()
+        return
+    end
+    if self.mode == 'boom' then
+        self:boom_update()
+        return
+    end
+    if self.mode == 'vanish' then
+        self:vanish_update()
+        return
+    end
+end
+
+function Bomb:flight_update()
+    if (self.dx < 0 and self.x <= self.fx) or
+            (self.dx > 0 and self.x >= self.fx) or
+            (self.dy < 0 and self.y <= self.fy) or
+            (self.dy > 0 and self.y >= self.fy) then
+        self.mode = 'chill'
+        self:draw()
+        return
+    end
+    self.x = self.x + self.dx
+    self.y = self.y + self.dy
+    self.hitbox:set_xy(self.x, self.y)
+    self.hitcircle:set_xy(self.x - 10, self.y - 10)
+    self:draw()
+end
+
+function Bomb:chill_update()
+    self:draw()
+    if self.hitcircle:collide(self.plr_hitbox) then
+        -- trace('detonate')
+        self.mode = 'detonate'
+        self.sprite = Bomb.detonate_a:copy()
+    end
+end
+
+function Bomb:detonate_update()
+    if self.detonate_charge >= 90 then
+        self.mode = 'boom'
+        self.sprite = Bomb.boom_a:copy()
+        self.x = self.x - 10
+        self.y = self.y - 10
+        return
+    end
+    self.detonate_charge = self.detonate_charge + 0.8
+    self.sprite:next_frame()
+    self:draw()
+end
+
+function Bomb:boom_update()
+    if self.detonate_charge <= 0 then
+        self.mode = 'vanish'
+        self:take_damage(1)
+        self.sprite = Bomb.vanish_a:copy()
+    end
+    self.detonate_charge = self.detonate_charge - 2
+    self:draw()
+end
+
+function Bomb:vanish_update()
+    -- if self.sprite:animation_end() then
+    --     self:take_damage(1)
+    -- end
+    self.sprite:next_frame()
+    self:draw()
+end
+
+function Bomb:focus(x, y)
+    self.plr_hitbox:set_xy(x+2, y+1)
+end
+--
+
+
+--
 Bullet = table.shallow_copy(Body)
-BULLET_A = Sprite:new(animation_generation({260}), 1)
+Bullet.flight_a = Sprite:new({260}, 1)
 function Bullet:new(x, y, fx, fy)
     obj = {
-        sprite = BULLET_A, flip = 0,
+        sprite = Bullet.flight_a, flip = 0,
         x = x, y = y,
         dx = 0, dy = 0,
         v = 1,
@@ -545,15 +846,18 @@ end
 Game = {}
 ENEMIES_PER_LVL = {1, 3, 5, 1, 6, 7, 8, 2}
 COORDS_MENU = {20, 28}
-COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76, 84}
-PALETTES = {'Old', 'Halloween', 'Tetris', 'Milk', 'Green', 'Velvet', '1bit'}
+COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76}
+PALETTES = {'Old', 'Velvet', 'Tetris', 'Milk', 'Green', 'Chess', 'Invisible!'}
 function Game:new()
     obj = {
         lvl = 1, mode = 'menu',
         enemies = {},
         bullets = {},
+        bombs = {},
         plr = Player:new(120, 64),
-        pts = 0, menu_pos = 1, count = 0
+        pts = 0, menu_pos = 1, count = 0,
+        secret_palette = 0, current_palette = 6,
+        boss = false
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -577,12 +881,13 @@ function Game:build_lvl()
     self.plr:set_start_stats()
     self.enemies = {}
     self.bullets = {}
-    if self.lvl == 4 then
-        --
+    self.bombs = {}
+    if self.lvl == 1 then
+        self:build_start_lvl()
         return
     end
-    if self.lvl == 8 then
-        --
+    if self.lvl == 7 then
+        self:build_boss_lvl()
         return
     end
     self:build_enemies(ENEMIES_PER_LVL[self.lvl])
@@ -611,6 +916,14 @@ function Game:update()
     end
 end
 
+function Game:build_boss_lvl()
+    self.boss = Boss:new(20, 20)
+end
+
+function Game:build_start_lvl()
+    table.insert(self.enemies, Enemy:new(16, 80))
+end
+
 function Game:menu_update()
     print('Level ', 2, 2, 8)
     print(self.lvl, 35, 2, 8)
@@ -632,8 +945,8 @@ function Game:menu_update()
 
     if btnp(4) then
         if self.menu_pos == 1 then
-            self:build_lvl()
             self.mode = 'action'
+            self:build_lvl()
         elseif self.menu_pos == 2 then
             self.mode = 'palette_menu'
         end
@@ -644,13 +957,18 @@ function Game:palette_menu_update()
     print('Level ', 2, 2, 8)
     print(self.lvl, 35, 2, 8)
     print('/ 8', 44, 2, 8)
-    print('Use arrows to move', 2, 118, 8)
-    print('Use [z] to throw', 2, 128, 8)
+    print('Use arrows and [z] to choose', 2, 118, 8)
 
     print('Back', 120, 20, 8)
-    for i = 1, 7 do
-        print(PALETTES[i], 120, COORDS_PALETTE_MENU[i + 1], 8)
+    for i = 1, 6 do
+        if i == self.current_palette then
+            print(PALETTES[i] .. '!', 120, COORDS_PALETTE_MENU[i + 1], 8)
+        else
+            print(PALETTES[i], 120, COORDS_PALETTE_MENU[i + 1], 8)
+        end
     end
+    print(PALETTES[7], 120, COORDS_PALETTE_MENU[8], self.secret_palette)
+
     if btnp(0) then
         self.menu_pos = (#COORDS_PALETTE_MENU + self.menu_pos - 2) % #COORDS_PALETTE_MENU + 1
     end
@@ -661,7 +979,9 @@ function Game:palette_menu_update()
         if self.menu_pos == 1 then
             self.mode = 'menu'
         else
+            if self.menu_pos == 8 then self.secret_palette = 8 else self.secret_palette = 0 end
             colorChange(self.menu_pos - 1)
+            self.current_palette = self.menu_pos - 1
         end
     end 
     print('~', 112, COORDS_PALETTE_MENU[self.menu_pos], 8)    
@@ -674,6 +994,30 @@ function Game:action_update()
     end
 
     self.plr:update()
+
+    if self.lvl == 1 then
+        rect(0, 0, 240, 26, 8)
+        print('Use arrows to move', 80, 8, 0)
+        print('Press [z] to throw', 80, 16, 0)
+        if self.plr.y < 26 then
+            self.plr.y = 26
+            self.plr.hitbox:set_xy(self.plr.x, self.plr.y)
+        end
+    end
+
+    if self.boss then
+        if self.plr.hitbox:collide(self.boss.hitbox) then
+            self:death()
+        end
+        if self.plr.boomerang and self.plr.boomerang.hitbox:collide(self.boss.hitbox) then
+            self.boss:suffer()
+        else
+            self.boss:chill()
+        end
+        self.boss:update()
+        return
+    end
+
     for _, e in ipairs(self.enemies) do
         e:focus(self.plr.x, self.plr.y)
         e:update()
@@ -681,16 +1025,32 @@ function Game:action_update()
         if bullet then
             table.insert(self.bullets, bullet)
         end
-
         if self.plr.boomerang and 
                 self.plr.boomerang.hitbox:collide(e.hitbox) then
             e:suffer()
         else
             e:chill()
         end
-        if e:is_dead() and e.sprite.frame == 60 then
+        if self.plr.hitbox:collide(e.hitbox) then
+            self:death()
+        end
+        if e:is_dead() and e.sprite:animation_end() then
             table.remove(self.enemies, _)
             self.pts = self.pts + 1
+        end
+    end
+
+    for _, b in ipairs(self.bombs) do
+        b:focus(self.plr.x, self.plr.y)
+        b:update()
+        if (b.mode == 'flight' or b.mode == 'chill') and self.plr.hitbox:collide(b.hitbox) then
+            self:death()
+        end
+        if b:is_dead() and b.sprite:animation_end() then
+            table.remove(self.bombs, _)
+        end
+        if b.mode == 'boom' and b.hitcircle:collide(self.plr.hitbox) then
+            self:death()
         end
     end
 
@@ -709,6 +1069,12 @@ function Game:death_update()
     if self.count == 150 then
         self.mode = 'menu'
         return
+    end
+    for _, b in ipairs(self.bombs) do
+        b:update()
+        if b:is_dead() and b.sprite:animation_end() then
+            table.remove(self.bombs, _)
+        end
     end
 
     self.plr:update()
@@ -741,7 +1107,7 @@ function Game:lvl_complete_check()
 end
 
 function Game:lvl_complete()
-    if self.lvl == 8 then
+    if self.lvl == 7 then
         self:game_final()
     end
     self.pts = 0
@@ -768,6 +1134,7 @@ end
 
 
 game = Game:new()
+game.lvl = 7
 function TIC()
     cls(C0)
     game:update()
@@ -779,11 +1146,15 @@ end
 -- 002:0088880088888888008888000088880008888800808888000800008000000000
 -- 003:0088880088888888000888000088880000888800088888008088880000800800
 -- 004:8800000088000000000000000000000000000000000000000000000000000000
--- 005:0000000008000080008888000080080000888800000880000088880008000080
--- 006:0800008000888800008008000088880000088000008888000800008000000000
+-- 005:8008000008008000088888000808080008888800088888000088800000080000
+-- 006:8008000008008000088888000808080008808800088088000088800000080000
+-- 007:8008000008008000088888000808080008808800088088000088800000000000
 -- 008:0000000000000000000888000088000000800000008000000000000000000000
 -- 009:0000000000000000008880000000880000000800000008000000000000000000
 -- 010:0000000000000000000008000000080000008800008880000000000000000000
+-- 011:0800000080800000080000000000000000000000000000000000000000000000
+-- 012:8080000000000000808000000000000000000000000000000000000000000000
+-- 013:8000000000000000000000000000000000000000000000000000000000000000
 -- 016:0000000000888800888888880088800000888800088880008088880000800000
 -- 017:0000000000888800888888880088800000880800088880008088080000800000
 -- 018:0000000000888800888888880080800000880800088080008088080000800000
@@ -792,12 +1163,108 @@ end
 -- 021:0000000000888800888888880000000000080000008000008008000000000000
 -- 022:0000000000000000008888008888888800000000008000000008000000000000
 -- 023:0000000000000000000000000088880088888888000000000000000000000000
--- 032:0000000008000000008888000080080000888800000880000088880008000000
--- 033:0000000008000000008880000080080000888000000880000088800008000000
--- 034:0000000008000000008800000080080000880000000880000088000008000000
--- 035:0000000008000000008800000080000000880000000080000088000008000000
--- 036:0000000008000000000800000080000000080000000000000008000008000000
--- 037:0000000008000000000000000080000000000000000000000000000008000000
+-- 032:0000000008008000088888000808080008808800088088000088800000000000
+-- 033:0000000000000000088880000808080008808800088088000088800000000000
+-- 034:0000000000000000008880000808080008808800008088000088000000000000
+-- 035:0000000000000000008080000808080000808000008080000008000000000000
+-- 036:0000000000000000008080000800000000808000000000000008000000000000
+-- 037:0000000000000000008000000000000000008000000000000008000000000000
+-- 048:0000000000000008000008880000888800088888008888880088888808888888
+-- 049:0888888888888888888888888888888888888888888888888888888888888888
+-- 050:0000000088000000888800008888800088888800888888808888888088888888
+-- 052:0000000000000000000008080000808000080808008080800008080800808080
+-- 053:0808080880808080080808088080808008080808808080800808080880808080
+-- 054:0000000080000000080800008080800008080800808080800808080080808080
+-- 056:0000000000000000000000000000000000000808000080800000000000000080
+-- 057:0000000000000080000000008000008000080808000080800808080880800000
+-- 058:0000000000000000080000000000000008000000808080000808080000008080
+-- 060:0000000000000000000000000000000000000800000000800000000000000000
+-- 061:0000000000000000000000008000000000080808000000800008000000000000
+-- 062:0000000000000000000000000000000008000000000000000800000000000000
+-- 064:0888888888888888888888888888888888888888888888888888888888888888
+-- 065:8888888888888888888888888888888888888888888888888888888888888888
+-- 066:8888888888888888888888888888888888888888888888888888888888888888
+-- 067:0000000080000000800000008000000080000000800000008000000080000000
+-- 068:0808080880808080080808088080808008080808808080800808080880808080
+-- 069:0808080880888880088888888888888808888888888888880888888880888880
+-- 070:0808080880808080080808088080808008080808808080800808080880808080
+-- 071:0000000080000000000000008000000000000000800000000000000080000000
+-- 072:0008000800000080080808000000808008080808008080000008000800008000
+-- 073:0800080880008080080808088080808000080808800000800808080880808080
+-- 074:0808080080008000000808008080008008000808008080800008080080008080
+-- 076:0008000000000000000000000000800008080000000000000008000800000000
+-- 077:0800000800000000080008000080808000000008000000000808000000000080
+-- 078:0800000080008000000008000080000000000000000000000008000080008000
+-- 080:0888888808888888008888880088888800088888000088880000088800000008
+-- 081:8888888888888888888888888888888888888888888888888888888888888888
+-- 082:8888888888888888888888808888888088888800888880008888000088000000
+-- 084:0808080800808080000808080080808000080808000080800000080800000000
+-- 085:0808080880808080080808088080808008080808808080800808080880808080
+-- 086:0808080880808080080808008080808008080800808080000808000080000000
+-- 088:0000080800808080000800000000808000000000000000800000000000000000
+-- 089:0800080080800000080808080080008008080808808080000808080800808080
+-- 090:0008080080808080080800008080800000080000800000000800000080000000
+-- 092:0000080800000000000000000000008000000000000000000000000000000000
+-- 093:0000080000800000080008000000000000080800808000000000000000000000
+-- 094:0000000000008000080000000000000000000000000000000000000000000000
+-- 097:0888888800000000000000000000000000000000000000000000000000000000
+-- 101:0808080800000000000000000000000000000000000000000000000000000000
+-- 128:0000000008000800008000800008000800088888000000000000888800080008
+-- 129:0000000008000800008000800008000888888888000000008888888808880080
+-- 130:0000000008000000008000000008000088880000000000008888000088800000
+-- 132:0000000008000800008000800008000800088888000000000000888800080008
+-- 133:0000000008000800008000800008000888888888000000008888888808880080
+-- 134:0000000008000000008000000008000088880000000000008888000088800000
+-- 136:0000000008000800008000800008000800088888000000000000888800080008
+-- 137:0000000008000800008000800008000888888888000000008888888808880080
+-- 138:0000000008000000008000000008000088880000000000008888000088800000
+-- 140:0000000008000800008000800008000800088888000000000000888800080008
+-- 141:0000000008000800008000800008000888888888000000008888888808880080
+-- 142:0000000008000000008000000008000088880000000000008888000088800000
+-- 144:0000080000008880000088880000088800000088000000080000000800000000
+-- 145:8880000800008800888088088880080888880008888888888888088888888888
+-- 146:8800000000080000888800008880000088800000880000008000000000000000
+-- 148:0000080000008880000088880000088800000088000000080000000800000000
+-- 149:8880000800008800888088088880000888888808888808888880008888880888
+-- 150:8800000000080000888800008880000088800000880000008000000000000000
+-- 152:0000080000008880000088880000088800000088000000080000000800000000
+-- 153:8880000800008800888088088880000888888888888000888880808888800088
+-- 154:8800000000080000888800008880000088800000880000008000000000000000
+-- 156:0000080000008880000088880000088800000088000000080000000800000000
+-- 157:8880000800008800888088088880000888888888888880088880080888888008
+-- 158:8800000000080000888800008880000088800000880000008000000000000000
+-- 161:0888888000888800000880000000000000000000000000000000000000000000
+-- 165:0888888000888800000880000000000000000000000000000000000000000000
+-- 169:0888888000888800000880000000000000000000000000000000000000000000
+-- 173:0888888000888800000880000000000000000000000000000000000000000000
+-- 192:0000000008000800008000800008000800088888000000000000888800080008
+-- 193:0000000008000800008000800008000888888888000000008888888808880080
+-- 194:0000000008000000008000000008000088880000000000008888000088800000
+-- 196:0000000008000800008000800008000800088888000000000000888800080008
+-- 197:0000000008000800008000800008000888888888000000008888888808880080
+-- 198:0000000008000000008000000008000088880000000000008888000088800000
+-- 200:0000000008000800008000800008000800088888000088880008000800000000
+-- 201:0000000008000800008000800008000888888888888888880888008088800008
+-- 202:0000000008000000008000000008000088880000888800008880000088000000
+-- 204:0000000008000800008000800008000800088888000088880008000800000000
+-- 205:0000000008000800008000800008000888888888888888880888008088800008
+-- 206:0000000008000000008000000008000088880000888800008880000088000000
+-- 208:0000080000008880000088880000088800000088000000080000000800000000
+-- 209:8880000800008800888088088880080888880008888888888888888888888888
+-- 210:8800000000080000888800008880000088800000880000008800000080000000
+-- 212:0000080000008880000088880000088800000088000000080000000800000000
+-- 213:8880000800008800888088088880080888880008888888888888888888888888
+-- 214:8800000000080000888800008880000088800000880000008000000000000000
+-- 216:0000080000008880000088880000088800000088000000080000000800000000
+-- 217:0000000000008800888088088880000888888888888000888880808888800088
+-- 218:0000000000080000888800008880000088800000880000008800000080000000
+-- 220:0000080000008880000088880000088800000088000000080000000800000000
+-- 221:0000000000008800888088088880000888888888888800088888080888880008
+-- 222:0000000000080000888800008880000088800000880000008800000080000000
+-- 225:0888888800888880000888000000000000000000000000000000000000000000
+-- 229:0888888000888800000880000000000000000000000000000000000000000000
+-- 233:0888888800888880000888000000000000000000000000000000000000000000
+-- 237:0888888800888880000888000000000000000000000000000000000000000000
 -- </SPRITES>
 
 -- <MAP>
@@ -823,6 +1290,6 @@ end
 -- </MAP>
 
 -- <PALETTE>
--- 000:0000002e303730003040501030238746878fa69aca000000ffffffebe5cef89020d0d058fffdaf94e3446f4367ffffff
+-- 000:0000002e3037a69aca40501030238746878f000000300030ffffffebe5ce6f4367d0d058fffdaf94e344fffffff89020
 -- </PALETTE>
 
