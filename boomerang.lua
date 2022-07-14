@@ -498,7 +498,7 @@ function Enemy:new(x, y)
         flip = math.random(0, 1), -- направление при отрисовке спрайта
         charge = 0,  -- заряд выстрела
         hitbox = Hitbox:new(x+1, y+1, x+5, y+6),
-        hp = 20, born_flag = true, death_flag = true
+        born_flag = true, death_flag = true
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -525,7 +525,7 @@ function Enemy:shoot()
         return false
     end
 
-    self.charge = self.charge + 1 - fence(math.random(0, 9), 0, 1)
+    self.charge = self.charge + 1 - fence(math.random(0, 5), 0, 1)
     if self.charge == 10 then
         self.charge = 0
         return Bullet:new(self.x, self.y, self.px + math.random(-4, 12), self.py + math.random(-4, 12))
@@ -561,19 +561,85 @@ end
 
 
 --
-AngryEnemy = table.shallow_copy(Enemy)
+Bomber = table.shallow_copy(Enemy)
+Bomber.default_a = Sprite:new({280}, 1)
+Bomber.suffer_a = Sprite:new(animation_generation({282, 281, 282, 281, 282, 281, 282, 281, 282, 281, 282, 281}), 1)
+Bomber.death_a = Sprite:new(animation_generation({294, 295, 296, 297, 298, 299}), 1)
+Bomber.born_a = Sprite:new(table.reverse(animation_generation({294, 295, 296, 297, 298, 299})), 1)
+Bomber.preparation_a = Sprite:new({}, 1)
+function Bomber:new(x, y)
+    obj = {
+        sprite = Bomber.born_a:copy(),
+        x = x, y = y, hp = 52,
+        px = 0, py = 0,  -- положение игрока
+        flip = math.random(0, 1), -- направление при отрисовке спрайта
+        charge = 0,  -- заряд выстрела
+        hitbox = Hitbox:new(x+1, y+2, x+6, y+6),
+        born_flag = true, death_flag = true,
+    }
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
 
-function AngryEnemy:shoot()
+function Bomber:update()
+    if self.born_flag then
+        if not self:born_update() then
+            self.sprite = Bomber.default_a:copy()
+        end
+        return
+    end
+    if self:is_dead() and self.death_flag then
+        self.death_flag = false
+        self.sprite = Bomber.death_a:copy()
+    end
+    if self.charge >= 10 then
+        PIXEL:draw(self.x, self.y+3)
+        PIXEL:draw(self.x, self.y+4)
+        PIXEL:draw(self.x+7, self.y+3)
+        PIXEL:draw(self.x+7, self.y+4)
+    end
+
+    self.sprite:next_frame()
+    self:draw()
+end
+
+function Bomber:shoot()
     if self.born_flag then
         return false
     end
 
-    self.charge = self.charge + 1 - fence(math.random(0, 5), 0, 1)
-    if self.charge == 10 then
+    if self.charge >= 10 then
+        self.charge = self.charge + 1
+    else
+        self.charge = self.charge + 1 - fence(math.random(0, 15), 0, 1)
+    end
+    if self.charge == 40 then
         self.charge = 0
-        return Bullet:new(self.x, self.y, self.px + math.random(-4, 12), self.py + math.random(-4, 12))
+        return Bomb:new(self.x, self.y, self.px + 5, self.py + 5)
     end
     return false
+end
+
+function Bomber:suffer()
+    if self:is_dead() then
+        return
+    end
+    self:take_damage(1)
+    -- if not (already suffer)
+    if not table.contains(self.sprite.animation, 282) then
+        self.sprite = Bomber.suffer_a:copy()
+    end
+end
+
+function Bomber:chill()
+    if self:is_dead() then
+        return
+    end
+    if self.born_flag then
+        return
+    end
+    self.sprite = Bomber.default_a:copy()
 end
 --
 
@@ -598,16 +664,18 @@ Boss.left_beard = {
     {x = 6, y = 13}
 }
 Boss.beard_a = boss_beard_anim()
-Boss.pixel = Sprite:new({269}, 1)
+PIXEL = Sprite:new({269}, 1)
 
 function Boss:new(x, y)
     obj = {
         sprite = Boss.default_a,
-        x = x, y = y, v = 0.5,
+        x = x, y = y, v = 0.4,
         beard_frame = 1,
         hair_cnt = 0, hair_y = {0, 0, 0, 0, 0},
-        hitbox = Hitbox:new(x+4, y+4, x+19, y+14),
-        px = 0, py = 0, hp = 100
+        hitbox = Hitbox:new(x+4, y+4, x+19, y+16),
+        px = 0, py = 0, hp = 100,
+        mode = 'default',
+        charge = 0
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -620,7 +688,7 @@ function Boss:update()
         self.v = -self.v
     end
     self.y = self.y + self.v
-    self.hitbox:set_xy(self.x, self.y)
+    self.hitbox:set_xy(self.x+4, self.y+4)
     -- hair animation
     self.hair_cnt = self.hair_cnt + 1
     if self.hair_cnt == 6 then
@@ -631,23 +699,28 @@ function Boss:update()
     end
     for i = 0, 4 do
         if self.v > 0 then
-            Boss.pixel:draw(self.x + i*4, self.y + self.hair_y[i+1], 0)
+            PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1], 0)
         else
-            Boss.pixel:draw(self.x + i*4, self.y + self.hair_y[i+1] + 1, 0)
+            PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1] + 1, 0)
         end
     end
     -- beard animation
     self.beard_frame = (self.beard_frame + 1) % #Boss.beard_a + 1
     for _, i in ipairs(Boss.beard_a[self.beard_frame]) do
         if i < 0 then
-            Boss.pixel:draw(self.x + Boss.left_beard[-i].x, self.y + Boss.left_beard[-i].y, 0)
+            PIXEL:draw(self.x + Boss.left_beard[-i].x, self.y + Boss.left_beard[-i].y, 0)
         else
-            Boss.pixel:draw(self.x + Boss.right_beard[i].x, self.y + Boss.right_beard[i].y, 0)
+            PIXEL:draw(self.x + Boss.right_beard[i].x, self.y + Boss.right_beard[i].y, 0)
         end
     end
     -- drawing
     self.sprite:next_frame()
     self:draw()
+    -- opening mouth
+    if self.mode == 'opening_mouth' and self.sprite:animation_end() then
+        self.mode = 'default'
+        self.sprite = Boss.default_a:copy()
+    end
 end
 
 function Boss:suffer()
@@ -668,7 +741,14 @@ function Boss:chill()
 end
 
 function Boss:shoot()
-    -- body
+    self.charge = self.charge + 1 - fence(math.random(0, 5), 0, 1)
+    if self.charge == 10 and self.mode == 'default' then
+        self.mode = 'opening_mouth'
+        self.sprite = Boss.opening_mouth_a:copy()
+        self.charge = 0
+        return Bullet:new(self.x + 11, self.y + 11, self.px, self.py)
+    end
+    return false
 end
 --
 
@@ -690,7 +770,7 @@ function Bomb:new(x, y, fx, fy)
         fx = fx, fy = fy, v = 1,
         dx = 0, dy = 0,
         plr_hitbox = Hitbox:new(2, 1, 5, 7),
-        hp = 1
+        hp = 1, marker = 'bomb'
     }
     if fx == x then
         fx = fx + 0.0000001
@@ -754,22 +834,23 @@ end
 
 function Bomb:chill_update()
     self:draw()
-    if self.hitcircle:collide(self.plr_hitbox) then
-        -- trace('detonate')
+    -- now bomb is detonate immediately
+    -- if self.hitcircle:collide(self.plr_hitbox) then
+    if true then
         self.mode = 'detonate'
         self.sprite = Bomb.detonate_a:copy()
     end
 end
 
 function Bomb:detonate_update()
-    if self.detonate_charge >= 90 then
+    if self.detonate_charge >= 60 then
         self.mode = 'boom'
         self.sprite = Bomb.boom_a:copy()
         self.x = self.x - 10
         self.y = self.y - 10
         return
     end
-    self.detonate_charge = self.detonate_charge + 0.8
+    self.detonate_charge = self.detonate_charge + 1
     self.sprite:next_frame()
     self:draw()
 end
@@ -806,7 +887,7 @@ function Bullet:new(x, y, fx, fy)
         sprite = Bullet.flight_a, flip = 0,
         x = x, y = y,
         dx = 0, dy = 0,
-        v = 1,
+        v = 1, marker = 'bullet',
         hitbox = Hitbox:new(x, y, x+1, y+1)
     }
 
@@ -844,7 +925,8 @@ end
 
 --
 Game = {}
-ENEMIES_PER_LVL = {1, 3, 5, 1, 6, 7, 8, 2}
+ENEMIES_PER_LVL = {1, 3, 5, 0, 4, 5, 7, 1}
+BOMBERS_PER_LVL = {0, 0, 0, 1, 1, 2, 2, 1}
 COORDS_MENU = {20, 28}
 COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76}
 PALETTES = {'Old', 'Velvet', 'Tetris', 'Milk', 'Green', 'Chess', 'Invisible!'}
@@ -855,7 +937,7 @@ function Game:new()
         bullets = {},
         bombs = {},
         plr = Player:new(120, 64),
-        pts = 0, menu_pos = 1, count = 0,
+        menu_pos = 1, count = 0,
         secret_palette = 0, current_palette = 6,
         boss = false
     }
@@ -864,7 +946,7 @@ function Game:new()
     self.__index = self; return obj
 end
 
-function Game:build_enemies(k)
+function Game:build_enemies(k, m)
     for i=1, k do
         x = 15; y = 8
         while not self:build_enemies_check(x, y) do
@@ -872,6 +954,14 @@ function Game:build_enemies(k)
             y = math.random(0, 16)
         end
         table.insert(self.enemies, Enemy:new(x * 8, y * 8))
+    end
+    for i=1, m do
+        x = 15; y = 8
+        while not self:build_enemies_check(x, y) do
+            x = math.random(0, 29)
+            y = math.random(0, 16)
+        end
+        table.insert(self.enemies, Bomber:new(x * 8, y * 8))
     end
 end
 
@@ -890,7 +980,7 @@ function Game:build_lvl()
         self:build_boss_lvl()
         return
     end
-    self:build_enemies(ENEMIES_PER_LVL[self.lvl])
+    self:build_enemies(ENEMIES_PER_LVL[self.lvl], BOMBERS_PER_LVL[self.lvl])
 end
 
 function Game:update()
@@ -917,7 +1007,8 @@ function Game:update()
 end
 
 function Game:build_boss_lvl()
-    self.boss = Boss:new(20, 20)
+    self.boss = true
+    table.insert(self.enemies, Boss:new(20, 20))
 end
 
 function Game:build_start_lvl()
@@ -1005,25 +1096,16 @@ function Game:action_update()
         end
     end
 
-    if self.boss then
-        if self.plr.hitbox:collide(self.boss.hitbox) then
-            self:death()
-        end
-        if self.plr.boomerang and self.plr.boomerang.hitbox:collide(self.boss.hitbox) then
-            self.boss:suffer()
-        else
-            self.boss:chill()
-        end
-        self.boss:update()
-        return
-    end
-
     for _, e in ipairs(self.enemies) do
         e:focus(self.plr.x, self.plr.y)
         e:update()
         bullet = e:shoot()
         if bullet then
-            table.insert(self.bullets, bullet)
+            if bullet.marker == 'bomb' then
+                table.insert(self.bombs, bullet)
+            else
+                table.insert(self.bullets, bullet)
+            end
         end
         if self.plr.boomerang and 
                 self.plr.boomerang.hitbox:collide(e.hitbox) then
@@ -1051,6 +1133,13 @@ function Game:action_update()
         end
         if b.mode == 'boom' and b.hitcircle:collide(self.plr.hitbox) then
             self:death()
+        end
+        if b.mode == 'boom' then
+            for _, e in ipairs(self.enemies) do
+                if b.hitcircle:collide(e.hitbox) then
+                   e:take_damage(30) 
+                end
+            end
         end
     end
 
@@ -1081,6 +1170,12 @@ function Game:death_update()
     for _, e in ipairs(self.enemies) do
         e:draw()
     end
+    for _, b in ipairs(self.bullets) do
+        b:draw()
+    end
+    for _, b in ipairs(self.bombs) do
+        b:draw()
+    end 
     self.count = self.count + 1
 end
 
@@ -1103,11 +1198,11 @@ function Game:build_enemies_check(x, y)
 end
 
 function Game:lvl_complete_check()
-    return self.pts == ENEMIES_PER_LVL[self.lvl]
+    return #self.enemies == 0
 end
 
 function Game:lvl_complete()
-    if self.lvl == 7 then
+    if self.lvl == 8 then
         self:game_final()
     end
     self.pts = 0
@@ -1117,13 +1212,20 @@ function Game:lvl_complete()
 end
 
 function Game:lvl_complete_update()
-    if self.count == 150 then
+    if self.count == 120 then
         self.count = 0
         self.mode = 'menu'
         return
     end
 
-    self.plr:update()
+    for _, b in ipairs(self.bullets) do
+        b:draw()
+    end
+    for _, b in ipairs(self.bombs) do
+        b:draw()
+    end 
+    self.plr:draw()
+    -- self.plr:update()
     self.count = self.count + 1
 end
 
@@ -1134,7 +1236,7 @@ end
 
 
 game = Game:new()
-game.lvl = 7
+game.lvl = 4
 function TIC()
     cls(C0)
     game:update()
@@ -1163,12 +1265,22 @@ end
 -- 021:0000000000888800888888880000000000080000008000008008000000000000
 -- 022:0000000000000000008888008888888800000000008000000008000000000000
 -- 023:0000000000000000000000000088880088888888000000000000000000000000
+-- 024:0008080800808080088888800808808008888880088888800088880000088000
+-- 025:0008080800808080088888800808808008800880088008800080080000088000
+-- 026:0008080800808080088888800808808008800880088008800088880000088000
+-- 027:0008080800808080088888808808808888888888088888800088880000088000
 -- 032:0000000008008000088888000808080008808800088088000088800000000000
 -- 033:0000000000000000088880000808080008808800088088000088800000000000
 -- 034:0000000000000000008880000808080008808800008088000088000000000000
 -- 035:0000000000000000008080000808080000808000008080000008000000000000
 -- 036:0000000000000000008080000800000000808000000000000008000000000000
 -- 037:0000000000000000008000000000000000008000000000000008000000000000
+-- 038:0000000000808080088888800808808008800880008008800080080000088000
+-- 039:0000000000808000008888800808808008800880008008000080080000088000
+-- 040:0000000000000000008888000808808008800880008008000080080000088000
+-- 041:0000000000000000008008000808808000800800008008000080080000088000
+-- 042:0000000000000000000008000808000000000800008000000000080000080000
+-- 043:0000000000000000000008000800000000000000000000000000080000000000
 -- 048:0000000000000008000008880000888800088888008888880088888808888888
 -- 049:0888888888888888888888888888888888888888888888888888888888888888
 -- 050:0000000088000000888800008888800088888800888888808888888088888888
