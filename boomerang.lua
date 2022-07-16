@@ -466,7 +466,7 @@ function Boomerang:new(x, y, dx, dy)
         sprite = BOOMERANG_A:copy(),
         x = x, y = y,
         dx = dx, dy = dy,
-        v = 1.6, k = 1,
+        v = 1.8, k = 1,
         px = 0, py = 0,
         hitbox = Hitbox:new(x+2, y+2, x+5, y+5)
     }
@@ -531,7 +531,7 @@ Enemy.born_a = Sprite:new(table.reverse(animation_generation({288, 289, 290, 291
 function Enemy:new(x, y)
     obj = {
         sprite = Enemy.born_a:copy(),
-        x = x, y = y, hp = 20,
+        x = x, y = y, hp = 24,
         px = 0, py = 0,  -- положение игрока
         flip = math.random(0, 1), -- направление при отрисовке спрайта
         charge = 0,  -- заряд выстрела
@@ -563,8 +563,8 @@ function Enemy:shoot()
         return false
     end
 
-    self.charge = self.charge + 1 - fence(math.random(0, 5), 0, 1)
-    if self.charge == 10 then
+    self.charge = self.charge + 1 - fence(math.random(0, 7), 0, 1)
+    if self.charge >= 12 then
         self.charge = 0
         return Bullet:new(self.x, self.y, self.px + math.random(-4, 12), self.py + math.random(-4, 12))
     end
@@ -650,7 +650,7 @@ function Bomber:shoot()
     if self.charge >= 10 then
         self.charge = self.charge + 1
     else
-        self.charge = self.charge + 1 - fence(math.random(0, 15), 0, 1)
+        self.charge = self.charge + 1 - fence(math.random(0, 9), 0, 1)
     end
     if self.charge == 40 then
         self.charge = 0
@@ -832,9 +832,15 @@ function Boss:attack_update()
     end
 end
 
-function Boss:suffer_update()
-    -- nothing
+function Boss:draw()
+    Boss.sunglasses:draw(self.x + 3, self.y + (self.suffer_flag and 5 or 6), 0)
+    self.sprite:draw(self.x, self.y, self.flip)
+    self:draw_health_bar()
 end
+
+-- function Boss:suffer_update()
+--     -- nothing
+-- end
 
 function Boss:suffer()
     self:take_damage(1)
@@ -869,7 +875,7 @@ function Boss:shoot()
         return false
     end
     if self.attack_mode == 'shotgun' then
-        return Bullet:new(self.x+13, self.y+13, self.px + math.random(-22, 27), self.py + math.random(-22, 27))
+        return Bullet:new(self.x+13, self.y+13, self.px + math.random(-24, 30), self.py + math.random(-24, 30))
     elseif self.attack_mode == 'minigun' then
         if math.random(0, 5) == 0 then
             return Bullet:new(self.x+13, self.y+13, self.px+math.random(2, 4), self.py+math.random(2, 4))
@@ -1110,7 +1116,7 @@ end
 
 --
 Game = {}
-ENEMIES_PER_LVL = {1, 3, 5, 0, 4, 5, 7, 1}
+ENEMIES_PER_LVL = {2, 2, 4, 6, 4, 5, 7, 1}
 BOMBERS_PER_LVL = {0, 0, 0, 1, 1, 2, 2, 1}
 COORDS_MENU = {20, 28, 36}
 COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76}
@@ -1128,7 +1134,8 @@ function Game:new()
         menu_pos = 1, count = 0,
         secret_palette = 0, current_palette = 6,
         boss = false, angles = make_angles(),
-        difficulty = 'normal', dialog_window = 'nil'
+        difficulty = 'normal', dialog_window = 'nil',
+        boss = false
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -1348,13 +1355,21 @@ function Game:action_update()
             self.plr.y = 26
             self.plr.hitbox:set_xy(self.plr.x, self.plr.y)
         end
+    elseif self.lvl == 2 then
+        rect(0, 0, 240, 26, 8)
+        print('More time the boomerang flies', 30, 8, 0)
+        print('through the enemy = more damage', 30, 16, 0)
+        if self.plr.y < 26 then
+            self.plr.y = 26
+            self.plr.hitbox:set_xy(self.plr.x, self.plr.y)
+        end
     end
 
     for _, e in ipairs(self.enemies) do
         e:focus(self.plr.x, self.plr.y)
         e:update()
         bullet = e:shoot()
-        if bullet then
+        if bullet and self.lvl ~= 1 then
             if bullet.marker == 'bomb' then
                 table.insert(self.bombs, bullet)
             else
@@ -1496,7 +1511,7 @@ end
 
 
 game = Game:new()
-game.lvl = 7
+game.lvl = 3
 function TIC()
     cls(C0)
     game:update()
