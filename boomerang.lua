@@ -34,6 +34,44 @@ function colorChange(pn)
     exportpal(palette)
 end
 --
+function negative_colorChange(pn)
+    -- pn: palette number
+    local id = 8  -- id цвета
+    poke(ADDR+(id*3)+2, peek(ADDR+(pn*3)+2))  -- red
+    poke(ADDR+(id*3)+1, peek(ADDR+(pn*3)+1))  -- green
+    poke(ADDR+(id*3), peek(ADDR+(pn*3)))  -- blue
+
+    id = 0
+    poke(ADDR+(id*3)+2, peek(ADDR+(pn*3)+24+2))  -- red
+    poke(ADDR+(id*3)+1, peek(ADDR+(pn*3)+24+1))  -- green
+    poke(ADDR+(id*3), peek(ADDR+(pn*3)+24))  -- blue
+
+    savePalette()
+    exportpal(palette)
+end
+
+
+function math.sign(x)
+    if x<0 then
+        return -1
+    end
+    if x>0 then
+        return 1
+    end
+    return 0
+end
+
+
+function make_angles()
+    a0 = Body:new(ANGLE:copy(), 0, 16*8)
+    a1 = Body:new(ANGLE:copy(), 29*8, 16*8)
+    a1.flip = 1
+    a2 = Body:new(ANGLE:copy(), 0, 0)
+    a2.flip = 2
+    a3 = Body:new(ANGLE:copy(), 29*8, 0)
+    a3.flip = 3
+    return {a0, a1, a2, a3}
+end
 
 
 function sq_distance(x1, y1, x2, y2)
@@ -95,7 +133,7 @@ end
 
 function boss_opening_mouth_anim()
     res = {}
-    for _, f in ipairs({384, 388, 392}) do
+    for _, f in ipairs({384, 387, 390}) do
         for i = 1, 10 do
             table.insert(res, f)
         end
@@ -646,9 +684,11 @@ end
 
 --
 Boss = table.shallow_copy(Enemy)
-Boss.default_a = Sprite:new({452}, 4)
-Boss.opening_mouth_a = Sprite:new(boss_opening_mouth_anim(), 4)
-Boss.suffer_a = Sprite:new(animation_generation({456, 460, 456, 460, 456, 460, 456, 460, 456, 460, 456, 460}), 4)
+Boss.default_a = Sprite:new({452}, 3)
+Boss.opening_mouth_a = Sprite:new(boss_opening_mouth_anim(), 3)
+Boss.openned_mouth_a = Sprite:new({390}, 3)
+-- Boss.suffer_a = Sprite:new(animation_generation({456, 460, 456, 460, 456, 460, 456, 460, 456, 460, 456, 460}), 3)
+Boss.attack_a = Sprite:new({393}, 3)
 Boss.right_beard = {
     {x = 13, y = 18},
     {x = 14, y = 17},
@@ -664,18 +704,24 @@ Boss.left_beard = {
     {x = 6, y = 13}
 }
 Boss.beard_a = boss_beard_anim()
+Boss.attack_modes = {'shotgun', 'minigun', 'mortar'}
 PIXEL = Sprite:new({269}, 1)
+Boss.start_v = 0.4
+Boss.start_hp = 200
+Boss.sunglasses = Sprite:new({128}, 3)
 
 function Boss:new(x, y)
     obj = {
         sprite = Boss.default_a,
-        x = x, y = y, v = 0.4,
+        x = x, y = y, v = Boss.start_v,
         beard_frame = 1,
         hair_cnt = 0, hair_y = {0, 0, 0, 0, 0},
         hitbox = Hitbox:new(x+4, y+4, x+19, y+16),
-        px = 0, py = 0, hp = 100,
+        px = 0, py = 0, hp = Boss.start_hp,
         mode = 'default',
-        charge = 0
+        charge = 0, attack_mode = 'nil',
+        mortar_charge = 0,
+        suffer_flag = false
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -683,6 +729,7 @@ function Boss:new(x, y)
 end
 
 function Boss:update()
+    -- trace(self.mode)
     -- moving
     if self.y <= 1 or self.y+18 >= 136-1 then
         self.v = -self.v
@@ -716,39 +763,129 @@ function Boss:update()
     -- drawing
     self.sprite:next_frame()
     self:draw()
-    -- opening mouth
-    if self.mode == 'opening_mouth' and self.sprite:animation_end() then
+    self:draw_health_bar()
+    Boss.sunglasses:draw(self.x + 3, self.y + (self.suffer_flag and 5 or 6), 0)
+    -- mode
+    if self.mode == 'default' then
+        self:default_update()
+    elseif self.mode == 'opening_mouth' then
+        self:opening_mouth_update()
+    elseif self.mode == 'openned_mouth' then
+        self:openned_mouth_update()
+    elseif self.mode == 'attack' then
+        self:attack_update()
+    -- elseif self.mode == 'suffer' then
+    --     self:suffer_update()
+    end
+end
+
+function Boss:default_update()
+    self.charge = self.charge + 1 - fence(math.random(0, 6), 0, 1)
+    if self.charge >= 10 then
+        self.charge = 0
+        self.mode = 'opening_mouth'
+        self.sprite = Boss.opening_mouth_a:copy()
+    end
+end
+
+function Boss:opening_mouth_update()
+    if self.sprite:animation_end() then
+        self.mode = 'openned_mouth'
+        self.attack_mode = Boss.attack_modes[math.random(1, 3)]
+        self.sprite = Boss.openned_mouth_a:copy()
+        if self.attack_mode == 'mortar' then
+            self.v = math.sign(self.v) * Boss.start_v * 2.5
+        end
+    end
+end
+
+function Boss:openned_mouth_update()
+    if self.charge >= 100 then
+        self.mode = 'attack'
+        self.sprite = Boss.attack_a:copy()
+        self.charge = 0
+    end
+    if self.attack_mode == 'shotgun' then
+        self.charge = self.charge + 100/5
+    elseif self.attack_mode == 'minigun' then
+        self.charge = self.charge + 100/30
+    elseif self.attack_mode == 'mortar' then
+        self.charge = self.charge + 100/60
+    end
+end
+
+function Boss:attack_update()
+    if self.charge >= 100 then
+        self.charge = 0
         self.mode = 'default'
         self.sprite = Boss.default_a:copy()
+        self.v = math.sign(self.v) * Boss.start_v
+        return
     end
+    if self.attack_mode == 'shotgun' then
+        self.charge = self.charge + 100/10
+    elseif self.attack_mode == 'minigun' then
+        self.charge = self.charge + 100/90
+    elseif self.attack_mode == 'mortar' then
+        self.charge = self.charge + 100/120
+        self.mortar_charge = self.mortar_charge + 1
+    end
+end
+
+function Boss:suffer_update()
+    -- nothing
 end
 
 function Boss:suffer()
-    if self:is_dead() then
-        return
-    end
     self:take_damage(1)
-    -- if not (already suffer)
-    if not table.contains(self.sprite.animation, 460) then
-        self.sprite = Boss.suffer_a:copy()
-    end
+    -- if self.mode == 'attack' then
+    --     return
+    -- end
+    -- if self.mode == 'openned_mouth' then
+    --     self.mode = 'suffer'
+    --     return
+    -- end
+    -- if self.mode ~= 'suffer' then
+    --     self.mode = 'suffer'
+    --     -- self.charge = 0
+    --     self.sprite = Boss.suffer_a:copy()
+    -- end
+    self.suffer_flag = true
 end
 
 function Boss:chill()
-    if table.contains(self.sprite.animation, 460) then
-        self.sprite = Boss.default_a:copy()
-    end
+    self.suffer_flag = false
+    -- if self.mode == 'suffer' then
+    --     self.mode = 'default'
+    --     self.sprite = Boss.default_a:copy()
+    -- end
+    -- if table.contains(self.sprite.animation, 460) then
+    --     self.sprite = Boss.default_a:copy()
+    -- end
 end
 
 function Boss:shoot()
-    self.charge = self.charge + 1 - fence(math.random(0, 5), 0, 1)
-    if self.charge == 10 and self.mode == 'default' then
-        self.mode = 'opening_mouth'
-        self.sprite = Boss.opening_mouth_a:copy()
-        self.charge = 0
-        return Bullet:new(self.x + 11, self.y + 11, self.px, self.py)
+    if self.mode ~= 'attack' then
+        return false
+    end
+    if self.attack_mode == 'shotgun' then
+        return Bullet:new(self.x+13, self.y+13, self.px + math.random(-22, 27), self.py + math.random(-22, 27))
+    elseif self.attack_mode == 'minigun' then
+        if math.random(0, 5) == 0 then
+            return Bullet:new(self.x+13, self.y+13, self.px+math.random(2, 4), self.py+math.random(2, 4))
+        end
+    elseif self.attack_mode == 'mortar' then
+        if self.mortar_charge >= 12 then
+            self.mortar_charge = 0
+            return Bomb:new(self.x+13, self.y+13, math.random(50, 210), self.y+13)
+        end
     end
     return false
+end
+
+function Boss:draw_health_bar()
+    rect(234, 2, 4, 132, 8)
+    rect(235, 3, 2, 130 - 130 * self.hp / self.start_hp, 0)
 end
 --
 
@@ -924,12 +1061,63 @@ end
 
 
 --
+DialogWindow = {}
+function DialogWindow:new(message_strings, x, y, width, height)
+    obj = {
+        message = message_strings,
+        x = x, y = y,
+        width = width, height = height,
+        pos = false
+    }
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function DialogWindow:update()
+    -- drawing
+    rect(self.x, self.y, self.width, self.height, 8)
+    rect(self.x+2, self.y+2, self.width-4, self.height-4, 0)
+    local x = self.x + 10
+    local y = self.y + 4
+    for i, s in ipairs(self.message) do
+        print(s, x, y + 8*(i-1), 8)
+    end
+    local y2 = self.y + self.height - 12
+    if self.pos then
+        print('~Ok        Cancel', x, y2, 8)  
+    else
+        print(' Ok       ~Cancel', x, y2, 8)  
+    end
+    -- btns
+    if btnp(2) or btnp(3) then
+        self.pos = not self.pos
+    end
+end
+
+function DialogWindow:get_command()
+    if btnp(4) then
+        -- if self.pos then
+        --     return 'Ok'
+        -- end
+        -- return 'Cancel'
+        return (self.pos) and 'Ok' or 'Cancel'
+    end
+    return false
+end
+--
+
+
+--
 Game = {}
 ENEMIES_PER_LVL = {1, 3, 5, 0, 4, 5, 7, 1}
 BOMBERS_PER_LVL = {0, 0, 0, 1, 1, 2, 2, 1}
-COORDS_MENU = {20, 28}
+COORDS_MENU = {20, 28, 36}
 COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76}
+COORDS_DIFFICULTY_MENU = {20, 28, 36}
 PALETTES = {'Old', 'Velvet', 'Tetris', 'Milk', 'Green', 'Chess', 'Invisible!'}
+ANGLE = Sprite:new({0}, 1)
+
 function Game:new()
     obj = {
         lvl = 1, mode = 'menu',
@@ -939,7 +1127,8 @@ function Game:new()
         plr = Player:new(120, 64),
         menu_pos = 1, count = 0,
         secret_palette = 0, current_palette = 6,
-        boss = false
+        boss = false, angles = make_angles(),
+        difficulty = 'normal', dialog_window = 'nil'
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -966,7 +1155,7 @@ function Game:build_enemies(k, m)
 end
 
 function Game:build_lvl()
-    self.pts = 0
+    self.pts = 0  -- nevermind
     self.count = 0
     self.plr:set_start_stats()
     self.enemies = {}
@@ -984,6 +1173,13 @@ function Game:build_lvl()
 end
 
 function Game:update()
+    for _, d in ipairs(self.angles) do
+        d:draw()
+    end
+    if self.dialog_window ~= 'nil' then
+        self:dialog_window_update()
+        return
+    end
     if self.mode == 'action' then
         self:action_update()
         return
@@ -998,6 +1194,10 @@ function Game:update()
     end
     if self.mode == 'palette_menu' then
         self:palette_menu_update()
+        return
+    end
+    if self.mode == 'difficulty_menu' then
+        self:difficulty_menu_update()
         return
     end
     if self.mode == 'lvl_complete' then
@@ -1016,15 +1216,12 @@ function Game:build_start_lvl()
 end
 
 function Game:menu_update()
-    print('Level ', 2, 2, 8)
-    print(self.lvl, 35, 2, 8)
-    print('/ 8', 44, 2, 8)
-
-    print('Use arrows to move', 2, 118, 8)
-    print('Use [z] to throw', 2, 128, 8)
+    print('Level ' .. tostring(self.lvl) .. ' / 8', 2, 2, 8)
+    print('Use arrows and [z] to choose', 2, 118, 8)
     -- ниже -- пункты меню
     print('Play', 120, 20, 8)
     print('Change palette', 120, 28, 8)
+    print('Change difficulty', 120, 36, 8)
     print('~', 112, COORDS_MENU[self.menu_pos], 8)
 
     if btnp(0) then
@@ -1040,14 +1237,15 @@ function Game:menu_update()
             self:build_lvl()
         elseif self.menu_pos == 2 then
             self.mode = 'palette_menu'
+        elseif self.menu_pos == 3 then
+            self.mode = 'difficulty_menu'
+            self.menu_pos = 2
         end
     end
 end
 
 function Game:palette_menu_update()
-    print('Level ', 2, 2, 8)
-    print(self.lvl, 35, 2, 8)
-    print('/ 8', 44, 2, 8)
+    print('Level ' .. tostring(self.lvl) .. ' / 8', 2, 2, 8)
     print('Use arrows and [z] to choose', 2, 118, 8)
 
     print('Back', 120, 20, 8)
@@ -1074,8 +1272,64 @@ function Game:palette_menu_update()
             colorChange(self.menu_pos - 1)
             self.current_palette = self.menu_pos - 1
         end
-    end 
+    end
+    -- for test
+    -- if btnp(5) then
+    --     negative_colorChange(self.current_palette)
+    -- end
+    --
     print('~', 112, COORDS_PALETTE_MENU[self.menu_pos], 8)    
+end
+
+function Game:difficulty_menu_update()
+    print('Level ' .. tostring(self.lvl) .. ' / 8', 2, 2, 8)
+    print('Use arrows and [z] to choose', 2, 118, 8)
+    -- ниже -- пункты меню
+    print('Back', 120, 20, 8)
+    if self.difficulty == 'normal' then
+        print('Normal!', 120, 28, 8)
+    else
+        print('Normal', 120, 28, 8)
+    end
+    if self.difficulty == 'hard' then
+        print('Hard!', 120, 36, 8)
+    else
+        print('Hard', 120, 36, 8)
+    end
+    print('~', 112, COORDS_DIFFICULTY_MENU[self.menu_pos], 8)
+
+    if btnp(0) then
+        self.menu_pos = (#COORDS_DIFFICULTY_MENU + self.menu_pos - 2) % #COORDS_DIFFICULTY_MENU + 1
+    end
+    if btnp(1) then
+        self.menu_pos = self.menu_pos % #COORDS_DIFFICULTY_MENU + 1
+    end
+    if btnp(4) then
+        if self.menu_pos == 1 then
+            self.mode = 'menu'
+        else
+            self.dialog_window = DialogWindow:new({'The Game will start', 'from first level.', 'Are you sure?'}, 60, 30, 120, 80)
+        end
+    end
+end
+
+function Game:dialog_window_update()
+    self.dialog_window:update()
+    if self.mode == 'difficulty_menu' then
+        if btnp(4) then
+            if self.dialog_window:get_command() == 'Ok' then
+                self.dialog_window = 'nil'
+                self.lvl = 1
+                if self.menu_pos == 2 then
+                    self.difficulty = 'normal'
+                elseif self.menu_pos == 3 then
+                    self.difficulty = 'hard'
+                end
+            elseif self.dialog_window:get_command() == 'Cancel' then
+                self.dialog_window = 'nil'
+            end
+        end
+    end
 end
 
 function Game:action_update()
@@ -1186,6 +1440,12 @@ function Game:death()
 end
 
 function Game:build_enemies_check(x, y)
+    if (x == 16 and y == 29)  or 
+            (x == 0 and y == 29)  or 
+            (x == 16 and y == 0)  or 
+            (x == 0 and y == 0) then
+        return false
+    end
     if x <= 16 and y <= 8 and x >= 14 and y >= 6 then
         return false
     end
@@ -1236,11 +1496,25 @@ end
 
 
 game = Game:new()
-game.lvl = 4
+game.lvl = 7
 function TIC()
     cls(C0)
     game:update()
 end
+
+-- <TILES>
+-- 000:8000000080000000800000008000000080000000800000008000000088888888
+-- 128:0888888880008088000008880000000000000000000000000000000000000000
+-- 129:8888888880080888000088800000000000000000000000000000000000000000
+-- 130:8000000000000000000000000000000000000000000000000000000000000000
+-- 192:0000000008000800008000800008000800088888000000000000888800080008
+-- 193:0000000008000800008000800008000888888888000000008888888808880080
+-- 194:0000000008000000008000000008000088880000000000008888000088800000
+-- 208:0000080000008880000088880000088800000088000000080000000800000000
+-- 209:8880000800008800888088088880080888880008888888888888888888888888
+-- 210:8800000000080000888800008880000088800000880000008800000080000000
+-- 225:0888888800888880000888000000000000000000000000000000000000000000
+-- </TILES>
 
 -- <SPRITES>
 -- 000:0000000000888800888888880088880000888800088888008088880000088000
@@ -1321,52 +1595,59 @@ end
 -- 094:0000000000008000080000000000000000000000000000000000000000000000
 -- 097:0888888800000000000000000000000000000000000000000000000000000000
 -- 101:0808080800000000000000000000000000000000000000000000000000000000
--- 128:0000000008000800008000800008000800088888000000000000888800080008
--- 129:0000000008000800008000800008000888888888000000008888888808880080
--- 130:0000000008000000008000000008000088880000000000008888000088800000
--- 132:0000000008000800008000800008000800088888000000000000888800080008
--- 133:0000000008000800008000800008000888888888000000008888888808880080
--- 134:0000000008000000008000000008000088880000000000008888000088800000
--- 136:0000000008000800008000800008000800088888000000000000888800080008
--- 137:0000000008000800008000800008000888888888000000008888888808880080
--- 138:0000000008000000008000000008000088880000000000008888000088800000
--- 140:0000000008000800008000800008000800088888000000000000888800080008
--- 141:0000000008000800008000800008000888888888000000008888888808880080
--- 142:0000000008000000008000000008000088880000000000008888000088800000
+-- 128:0000000008000800008000800008000800088888000000000000000000000000
+-- 129:0000000008000800008000800008000888888888000000000000000000000000
+-- 130:0000000008000000008000000008000088880000000000000000000000000000
+-- 131:0000000008000800008000800008000800088888000000000000000000000000
+-- 132:0000000008000800008000800008000888888888000000000000000000000000
+-- 133:0000000008000000008000000008000088880000000000000000000000000000
+-- 134:0000000008000800008000800008000800088888000000000000000000000000
+-- 135:0000000008000800008000800008000888888888000000000000000000000000
+-- 136:0000000008000000008000000008000088880000000000000000000000000000
+-- 137:0000000008000800008000800008000800088888000000000000000000000000
+-- 138:0000000008000800008000800008000888888888000000000000000000000000
+-- 139:0000000008000000008000000008000088880000000000000000000000000000
+-- 140:0000000008000800008000800008000800088888000000000000000000000000
+-- 141:0000000008000800008000800008000888888888000000000000000000000000
+-- 142:0000000008000000008000000008000088880000000000000000000000000000
 -- 144:0000080000008880000088880000088800000088000000080000000800000000
--- 145:8880000800008800888088088880080888880008888888888888088888888888
--- 146:8800000000080000888800008880000088800000880000008000000000000000
--- 148:0000080000008880000088880000088800000088000000080000000800000000
--- 149:8880000800008800888088088880000888888808888808888880008888880888
--- 150:8800000000080000888800008880000088800000880000008000000000000000
--- 152:0000080000008880000088880000088800000088000000080000000800000000
--- 153:8880000800008800888088088880000888888888888000888880808888800088
--- 154:8800000000080000888800008880000088800000880000008000000000000000
+-- 145:0000000000008800888088088880080888880008888888888888088888888888
+-- 146:0000000000080000888800008880000088800000880000008000000000000000
+-- 147:0000080000008880000088880000088800000088000000080000000800000000
+-- 148:0000000000008800888088088880000888888808888808888880008888880888
+-- 149:0000000000080000888800008880000088800000880000008000000000000000
+-- 150:0000080000008880000088880000088800000088000000080000000800000000
+-- 151:0000000000008800888088088880000888888888888000888880808888800088
+-- 152:0000000000080000888800008880000088800000880000008000000000000000
+-- 153:0000080000008880000088880000088800000088000000080000000800000000
+-- 154:0000000000008800888088088880000888888888888880088880080888888008
+-- 155:0000000000080000888800008880000088800000880000008000000000000000
 -- 156:0000080000008880000088880000088800000088000000080000000800000000
--- 157:8880000800008800888088088880000888888888888880088880080888888008
--- 158:8800000000080000888800008880000088800000880000008000000000000000
+-- 157:0000000000008800888088088880000888888888888800088888080888880008
+-- 158:0000000000080000888800008880000088800000880000008000000000000000
 -- 161:0888888000888800000880000000000000000000000000000000000000000000
--- 165:0888888000888800000880000000000000000000000000000000000000000000
--- 169:0888888000888800000880000000000000000000000000000000000000000000
+-- 164:0888888000888800000880000000000000000000000000000000000000000000
+-- 167:0888888000888800000880000000000000000000000000000000000000000000
+-- 170:0888888000888800000880000000000000000000000000000000000000000000
 -- 173:0888888000888800000880000000000000000000000000000000000000000000
--- 192:0000000008000800008000800008000800088888000000000000888800080008
--- 193:0000000008000800008000800008000888888888000000008888888808880080
--- 194:0000000008000000008000000008000088880000000000008888000088800000
--- 196:0000000008000800008000800008000800088888000000000000888800080008
--- 197:0000000008000800008000800008000888888888000000008888888808880080
--- 198:0000000008000000008000000008000088880000000000008888000088800000
--- 200:0000000008000800008000800008000800088888000088880008000800000000
--- 201:0000000008000800008000800008000888888888888888880888008088800008
--- 202:0000000008000000008000000008000088880000888800008880000088000000
--- 204:0000000008000800008000800008000800088888000088880008000800000000
--- 205:0000000008000800008000800008000888888888888888880888008088800008
--- 206:0000000008000000008000000008000088880000888800008880000088000000
+-- 192:0000000008000800008000800008000800088888000000000000000000000000
+-- 193:0000000008000800008000800008000888888888000000000000000000000000
+-- 194:0000000008000000008000000008000088880000000000000000000000000000
+-- 196:0000000008000800008000800008000800088888000000000000000000000000
+-- 197:0000000008000800008000800008000888888888000000000000000000000000
+-- 198:0000000008000000008000000008000088880000000000000000000000000000
+-- 200:0000000008000800008000800008000800088888000000000000000000000000
+-- 201:0000000008000800008000800008000888888888000000000000000000000000
+-- 202:0000000008000000008000000008000088880000000000000000000000000000
+-- 204:0000000008000800008000800008000800088888000000000000000000000000
+-- 205:0000000008000800008000800008000888888888000000000000000000000000
+-- 206:0000000008000000008000000008000088880000000000000000000000000000
 -- 208:0000080000008880000088880000088800000088000000080000000800000000
--- 209:8880000800008800888088088880080888880008888888888888888888888888
--- 210:8800000000080000888800008880000088800000880000008800000080000000
+-- 209:0000000000008800888088088880080888880008888888888888888888888888
+-- 210:0000000000080000888800008880000088800000880000008800000080000000
 -- 212:0000080000008880000088880000088800000088000000080000000800000000
--- 213:8880000800008800888088088880080888880008888888888888888888888888
--- 214:8800000000080000888800008880000088800000880000008000000000000000
+-- 213:0000000000008800888088088880080888880008888888888888888888888888
+-- 214:0000000000080000888800008880000088800000880000008000000000000000
 -- 216:0000080000008880000088880000088800000088000000080000000800000000
 -- 217:0000000000008800888088088880000888888888888000888880808888800088
 -- 218:0000000000080000888800008880000088800000880000008800000080000000
