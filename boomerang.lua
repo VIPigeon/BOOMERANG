@@ -183,6 +183,100 @@ function table.reverse(t)
     return res
 end
 
+
+-- Cartoon -- описание интерфейса
+Cartoon = {}
+function Cartoon:new()
+    obj = {
+        t = 0, limit = 100,
+        name = 'nil'
+    }
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function Cartoon:update()
+    self.t = self.t + 1
+end
+
+function Cartoon:check()
+    return self.t >= self.limit
+end
+--
+
+
+--
+BornBossCartoon = table.shallow_copy(Cartoon)
+function BornBossCartoon:new()
+    obj = {
+        t = 0, limit = 31,
+        name = 'BornBoss',
+        bomb = Bomb:new(28, 68, 28, 68),
+        boss = Boss:new(20, 60)
+    }
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function BornBossCartoon:update()
+    if self.t <= self.limit - 2 then
+        self.t = self.t + 1
+        self.bomb:draw()
+        return
+    end
+    self.bomb:update()
+    if self.bomb.mode == 'vanish' then
+        self.boss:draw()
+        if self.bomb.sprite:animation_end() then
+            self.t = self.limit
+        end
+    end
+end
+
+function BornBossCartoon:get_boss()
+    return self.boss
+end
+--
+
+
+--
+DeathBossCartoon = table.shallow_copy(Cartoon)
+function DeathBossCartoon:new(boss)
+     obj = {
+        t = 0, limit = 900,
+        name = 'DeathBoss',
+        boss = boss
+    }
+    -- obj['boss'].sprite = Boss.dying_a:copy()
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function DeathBossCartoon:update()
+    if self.t == 0 then
+        self.boss.sprite = Boss.dying_a:copy()
+    end
+    self.t = self.t + 1
+    self.boss.sprite:next_frame()
+    self.boss:draw()
+    if self.t >= 300 then
+        if self.t % 3 == 0 then
+            self.boss.x = self.boss.x - 1
+        end
+    elseif self.t >= 100 then
+        rect(self.boss.x + 26, self.boss.y, 18*5 + 7, 9, 8)
+        print("Battle isn't over!", self.boss.x + 28, self.boss.y + 2, 0)
+    end
+    if self.boss.x <= -29 then
+        self.t = self.limit
+    end
+end
+--
+
+
 --
 Hitbox = {}
 function Hitbox:new(x1, y1, x2, y2)
@@ -687,7 +781,6 @@ Boss = table.shallow_copy(Enemy)
 Boss.default_a = Sprite:new({452}, 3)
 Boss.opening_mouth_a = Sprite:new(boss_opening_mouth_anim(), 3)
 Boss.openned_mouth_a = Sprite:new({390}, 3)
--- Boss.suffer_a = Sprite:new(animation_generation({456, 460, 456, 460, 456, 460, 456, 460, 456, 460, 456, 460}), 3)
 Boss.attack_a = Sprite:new({393}, 3)
 Boss.right_beard = {
     {x = 13, y = 18},
@@ -707,8 +800,10 @@ Boss.beard_a = boss_beard_anim()
 Boss.attack_modes = {'shotgun', 'minigun', 'mortar'}
 PIXEL = Sprite:new({269}, 1)
 Boss.start_v = 0.4
-Boss.start_hp = 200
+-- Boss.start_hp = 200
+Boss.start_hp = 10
 Boss.sunglasses = Sprite:new({128}, 3)
+Boss.dying_a = Sprite:new(animation_generation({456, 460, 456, 460, 456, 460, 456, 460, 456, 460, 456, 460}), 3)
 
 function Boss:new(x, y)
     obj = {
@@ -836,6 +931,30 @@ function Boss:draw()
     Boss.sunglasses:draw(self.x + 3, self.y + (self.suffer_flag and 5 or 6), 0)
     self.sprite:draw(self.x, self.y, self.flip)
     self:draw_health_bar()
+    -- hair animation
+    self.hair_cnt = self.hair_cnt + 1
+    if self.hair_cnt == 6 then
+        self.hair_cnt = 0
+        for i = 1, 5 do
+            self.hair_y[i] = math.random(0, 1)
+        end
+    end
+    for i = 0, 4 do
+        if self.v > 0 then
+            PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1], 0)
+        else
+            PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1] + 1, 0)
+        end
+    end
+    -- beard animation
+    self.beard_frame = (self.beard_frame + 1) % #Boss.beard_a + 1
+    for _, i in ipairs(Boss.beard_a[self.beard_frame]) do
+        if i < 0 then
+            PIXEL:draw(self.x + Boss.left_beard[-i].x, self.y + Boss.left_beard[-i].y, 0)
+        else
+            PIXEL:draw(self.x + Boss.right_beard[i].x, self.y + Boss.right_beard[i].y, 0)
+        end
+    end
 end
 
 -- function Boss:suffer_update()
@@ -1116,8 +1235,8 @@ end
 
 --
 Game = {}
-ENEMIES_PER_LVL = {2, 2, 4, 6, 4, 5, 7, 1}
-BOMBERS_PER_LVL = {0, 0, 0, 1, 1, 2, 2, 1}
+ENEMIES_PER_LVL = {2, 2, 4, 6, 0, 3, 0, 0, 4, 0}
+BOMBERS_PER_LVL = {0, 0, 0, 0, 1, 2, 0, 6, 3, 0}
 COORDS_MENU = {20, 28, 36}
 COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76}
 COORDS_DIFFICULTY_MENU = {20, 28, 36}
@@ -1134,8 +1253,8 @@ function Game:new()
         menu_pos = 1, count = 0,
         secret_palette = 0, current_palette = 6,
         boss = false, angles = make_angles(),
-        difficulty = 'normal', dialog_window = 'nil',
-        boss = false
+        difficulty = 'normal', dialog_window = false,
+        boss = false, cartoon = false
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -1183,7 +1302,11 @@ function Game:update()
     for _, d in ipairs(self.angles) do
         d:draw()
     end
-    if self.dialog_window ~= 'nil' then
+    if self.cartoon then
+        self:cartoon_update()
+        return
+    end
+    if self.dialog_window then
         self:dialog_window_update()
         return
     end
@@ -1215,7 +1338,26 @@ end
 
 function Game:build_boss_lvl()
     self.boss = true
-    table.insert(self.enemies, Boss:new(20, 20))
+    self.cartoon = BornBossCartoon:new()
+    -- table.insert(self.enemies, get_boss())
+end
+
+function Game:cartoon_update()
+    self.cartoon:update()
+    self.plr:update()
+    -- if self.plr.boomerang then
+    --     self.plr.boomerang:update()
+    -- end
+    if self.cartoon:check() then
+        if self.cartoon.name == 'BornBoss' then
+            table.insert(self.enemies, self.cartoon:get_boss())
+        elseif self.cartoon.name == 'DeathBoss' then
+            self.enemies = {}
+            self.bullets = {}
+            self.bombs = {}
+        end
+        self.cartoon = false
+    end
 end
 
 function Game:build_start_lvl()
@@ -1223,7 +1365,11 @@ function Game:build_start_lvl()
 end
 
 function Game:menu_update()
-    print('Level ' .. tostring(self.lvl) .. ' / 8', 2, 2, 8)
+    -- if self.difficulty == 'hard' then
+    --     print('Level ' .. tostring(self.lvl) .. ' / 7', 2, 2, 8)
+    -- else
+    print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
+    -- end
     print('Use arrows and [z] to choose', 2, 118, 8)
     -- ниже -- пункты меню
     print('Play', 120, 20, 8)
@@ -1252,7 +1398,7 @@ function Game:menu_update()
 end
 
 function Game:palette_menu_update()
-    print('Level ' .. tostring(self.lvl) .. ' / 8', 2, 2, 8)
+    print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
     print('Use arrows and [z] to choose', 2, 118, 8)
 
     print('Back', 120, 20, 8)
@@ -1325,7 +1471,7 @@ function Game:dialog_window_update()
     if self.mode == 'difficulty_menu' then
         if btnp(4) then
             if self.dialog_window:get_command() == 'Ok' then
-                self.dialog_window = 'nil'
+                self.dialog_window = false
                 self.lvl = 1
                 if self.menu_pos == 2 then
                     self.difficulty = 'normal'
@@ -1333,7 +1479,7 @@ function Game:dialog_window_update()
                     self.difficulty = 'hard'
                 end
             elseif self.dialog_window:get_command() == 'Cancel' then
-                self.dialog_window = 'nil'
+                self.dialog_window = false
             end
         end
     end
@@ -1386,8 +1532,12 @@ function Game:action_update()
             self:death()
         end
         if e:is_dead() and e.sprite:animation_end() then
-            table.remove(self.enemies, _)
-            self.pts = self.pts + 1
+            if self.boss then
+                self.cartoon = DeathBossCartoon:new(e)
+            else
+                table.remove(self.enemies, _)
+            end
+            -- self.pts = self.pts + 1
         end
     end
 
@@ -1477,13 +1627,14 @@ function Game:lvl_complete_check()
 end
 
 function Game:lvl_complete()
-    if self.lvl == 8 then
+    if self.lvl == 10 then
         self:game_final()
     end
     self.pts = 0
     self.count = 0
     self.lvl = self.lvl + 1
     self.mode = 'lvl_complete'
+    self.boss = false
 end
 
 function Game:lvl_complete_update()
@@ -1511,7 +1662,7 @@ end
 
 
 game = Game:new()
-game.lvl = 3
+game.lvl = 7
 function TIC()
     cls(C0)
     game:update()
