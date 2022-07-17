@@ -800,8 +800,7 @@ Boss.beard_a = boss_beard_anim()
 Boss.attack_modes = {'shotgun', 'minigun', 'mortar'}
 PIXEL = Sprite:new({269}, 1)
 Boss.start_v = 0.4
--- Boss.start_hp = 200
-Boss.start_hp = 10
+Boss.start_hp = 200
 Boss.sunglasses = Sprite:new({128}, 3)
 Boss.dying_a = Sprite:new(animation_generation({456, 460, 456, 460, 456, 460, 456, 460, 456, 460, 456, 460}), 3)
 
@@ -823,44 +822,22 @@ function Boss:new(x, y)
     self.__index = self; return obj
 end
 
-function Boss:update()
-    -- trace(self.mode)
-    -- moving
+function Boss:moving()
     if self.y <= 1 or self.y+18 >= 136-1 then
         self.v = -self.v
     end
     self.y = self.y + self.v
     self.hitbox:set_xy(self.x+4, self.y+4)
-    -- hair animation
-    self.hair_cnt = self.hair_cnt + 1
-    if self.hair_cnt == 6 then
-        self.hair_cnt = 0
-        for i = 1, 5 do
-            self.hair_y[i] = math.random(0, 1)
-        end
-    end
-    for i = 0, 4 do
-        if self.v > 0 then
-            PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1], 0)
-        else
-            PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1] + 1, 0)
-        end
-    end
-    -- beard animation
-    self.beard_frame = (self.beard_frame + 1) % #Boss.beard_a + 1
-    for _, i in ipairs(Boss.beard_a[self.beard_frame]) do
-        if i < 0 then
-            PIXEL:draw(self.x + Boss.left_beard[-i].x, self.y + Boss.left_beard[-i].y, 0)
-        else
-            PIXEL:draw(self.x + Boss.right_beard[i].x, self.y + Boss.right_beard[i].y, 0)
-        end
-    end
-    -- drawing
+end
+
+function Boss:update()
+    self:moving()
     self.sprite:next_frame()
     self:draw()
-    self:draw_health_bar()
-    Boss.sunglasses:draw(self.x + 3, self.y + (self.suffer_flag and 5 or 6), 0)
-    -- mode
+    self:call_mode()
+end
+
+function Boss:call_mode()
     if self.mode == 'default' then
         self:default_update()
     elseif self.mode == 'opening_mouth' then
@@ -869,8 +846,6 @@ function Boss:update()
         self:openned_mouth_update()
     elseif self.mode == 'attack' then
         self:attack_update()
-    -- elseif self.mode == 'suffer' then
-    --     self:suffer_update()
     end
 end
 
@@ -1012,6 +987,12 @@ function Boss:draw_health_bar()
     rect(234, 2, 4, 132, 8)
     rect(235, 3, 2, 130 - 130 * self.hp / self.start_hp, 0)
 end
+--
+
+
+--
+FinalBoss = table.shallow_copy(Boss)
+
 --
 
 
@@ -1233,6 +1214,8 @@ end
 --
 
 
+
+
 --
 Game = {}
 ENEMIES_PER_LVL = {2, 2, 4, 6, 0, 3, 0, 0, 4, 0}
@@ -1282,20 +1265,25 @@ end
 
 function Game:build_lvl()
     self.pts = 0  -- nevermind
+    self.boss = false
     self.count = 0
     self.plr:set_start_stats()
     self.enemies = {}
     self.bullets = {}
     self.bombs = {}
-    if self.lvl == 1 then
+    if self:real_lvl() == 1 then
         self:build_start_lvl()
         return
     end
-    if self.lvl == 7 then
+    if self:real_lvl() == 2 then
+        self:build_second_lvl()
+        return
+    end
+    if self:real_lvl() == 7 then
         self:build_boss_lvl()
         return
     end
-    self:build_enemies(ENEMIES_PER_LVL[self.lvl], BOMBERS_PER_LVL[self.lvl])
+    self:build_enemies(ENEMIES_PER_LVL[self:real_lvl()], BOMBERS_PER_LVL[self:real_lvl()])
 end
 
 function Game:update()
@@ -1364,12 +1352,17 @@ function Game:build_start_lvl()
     table.insert(self.enemies, Enemy:new(16, 80))
 end
 
+function Game:build_second_lvl()
+    table.insert(self.enemies, Enemy:new(16, 80))
+    table.insert(self.enemies, Enemy:new(220, 60))
+end
+
 function Game:menu_update()
-    -- if self.difficulty == 'hard' then
-    --     print('Level ' .. tostring(self.lvl) .. ' / 7', 2, 2, 8)
-    -- else
-    print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
-    -- end
+    if self.difficulty == 'normal' then
+        print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
+    elseif self.difficulty == 'hard' then
+        print('Level ' .. tostring(self.lvl) .. ' / 7', 2, 2, 8)
+    end
     print('Use arrows and [z] to choose', 2, 118, 8)
     -- ниже -- пункты меню
     print('Play', 120, 20, 8)
@@ -1398,7 +1391,11 @@ function Game:menu_update()
 end
 
 function Game:palette_menu_update()
-    print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
+    if self.difficulty == 'normal' then
+        print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
+    elseif self.difficulty == 'hard' then
+        print('Level ' .. tostring(self.lvl) .. ' / 7', 2, 2, 8)
+    end
     print('Use arrows and [z] to choose', 2, 118, 8)
 
     print('Back', 120, 20, 8)
@@ -1435,7 +1432,11 @@ function Game:palette_menu_update()
 end
 
 function Game:difficulty_menu_update()
-    print('Level ' .. tostring(self.lvl) .. ' / 8', 2, 2, 8)
+    if self.difficulty == 'normal' then
+        print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
+    elseif self.difficulty == 'hard' then
+        print('Level ' .. tostring(self.lvl) .. ' / 7', 2, 2, 8)
+    end
     print('Use arrows and [z] to choose', 2, 118, 8)
     -- ниже -- пункты меню
     print('Back', 120, 20, 8)
@@ -1493,7 +1494,7 @@ function Game:action_update()
 
     self.plr:update()
 
-    if self.lvl == 1 then
+    if self:real_lvl() == 1 then
         rect(0, 0, 240, 26, 8)
         print('Use arrows to move', 80, 8, 0)
         print('Press [z] to throw', 80, 16, 0)
@@ -1501,7 +1502,7 @@ function Game:action_update()
             self.plr.y = 26
             self.plr.hitbox:set_xy(self.plr.x, self.plr.y)
         end
-    elseif self.lvl == 2 then
+    elseif self:real_lvl() == 2 then
         rect(0, 0, 240, 26, 8)
         print('More time the boomerang flies', 30, 8, 0)
         print('through the enemy = more damage', 30, 16, 0)
@@ -1515,7 +1516,7 @@ function Game:action_update()
         e:focus(self.plr.x, self.plr.y)
         e:update()
         bullet = e:shoot()
-        if bullet and self.lvl ~= 1 then
+        if bullet and self:real_lvl() ~= 1 then
             if bullet.marker == 'bomb' then
                 table.insert(self.bombs, bullet)
             else
@@ -1602,6 +1603,9 @@ function Game:death()
     self.mode = 'death'
     self.plr:take_damage(1)
     self.plr:death()
+    if self.difficulty == 'hard' then
+        self.lvl = 1
+    end
 end
 
 function Game:build_enemies_check(x, y)
@@ -1627,14 +1631,13 @@ function Game:lvl_complete_check()
 end
 
 function Game:lvl_complete()
-    if self.lvl == 10 then
+    if self:real_lvl() == 10 then
         self:game_final()
     end
     self.pts = 0
     self.count = 0
     self.lvl = self.lvl + 1
     self.mode = 'lvl_complete'
-    self.boss = false
 end
 
 function Game:lvl_complete_update()
@@ -1657,6 +1660,14 @@ end
 
 function Game:game_final()
     -- body
+end
+
+function Game:real_lvl()
+    if self.difficulty == 'normal' then
+        return self.lvl
+    end
+    -- if self.difficulty == 'hard'
+    return self.lvl + (self.lvl >= 3 and 3 or 2)
 end
 --
 
