@@ -815,6 +815,7 @@ function Boss:new(x, y)
         mode = 'default',
         charge = 0, attack_mode = 'nil',
         mortar_charge = 0,
+        flip = 0,
         suffer_flag = false
     }
     -- чистая магия!
@@ -903,7 +904,7 @@ function Boss:attack_update()
 end
 
 function Boss:draw()
-    Boss.sunglasses:draw(self.x + 3, self.y + (self.suffer_flag and 5 or 6), 0)
+    Boss.sunglasses:draw(self.x + 3 - 6*self.flip, self.y + (self.suffer_flag and 5 or 6), self.flip)
     self.sprite:draw(self.x, self.y, self.flip)
     self:draw_health_bar()
     -- hair animation
@@ -915,19 +916,35 @@ function Boss:draw()
         end
     end
     for i = 0, 4 do
-        if self.v > 0 then
-            PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1], 0)
+        if self.flip == 0 then
+            if self.v > 0 then
+                PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1], 0)
+            else
+                PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1] + 1, 0)
+            end
         else
-            PIXEL:draw(self.x + i*4, self.y + self.hair_y[i+1] + 1, 0)
+            if self.v > 0 then
+                PIXEL:draw(self.x + 23 - i*4, self.y + self.hair_y[i+1], 0)
+            else
+                PIXEL:draw(self.x + 23 - i*4, self.y + self.hair_y[i+1] + 1, 0)
+            end
         end
     end
     -- beard animation
     self.beard_frame = (self.beard_frame + 1) % #Boss.beard_a + 1
     for _, i in ipairs(Boss.beard_a[self.beard_frame]) do
-        if i < 0 then
-            PIXEL:draw(self.x + Boss.left_beard[-i].x, self.y + Boss.left_beard[-i].y, 0)
+        if self.flip == 0 then
+            if i < 0 then
+                PIXEL:draw(self.x + Boss.left_beard[-i].x, self.y + Boss.left_beard[-i].y, 0)
+            else
+                PIXEL:draw(self.x + Boss.right_beard[i].x, self.y + Boss.right_beard[i].y, 0)
+            end
         else
-            PIXEL:draw(self.x + Boss.right_beard[i].x, self.y + Boss.right_beard[i].y, 0)
+            if i < 0 then
+                PIXEL:draw(self.x + 23 - Boss.left_beard[-i].x, self.y + Boss.left_beard[-i].y, 0)
+            else
+                PIXEL:draw(self.x + 23 - Boss.right_beard[i].x, self.y + Boss.right_beard[i].y, 0)
+            end
         end
     end
 end
@@ -992,7 +1009,212 @@ end
 
 --
 FinalBoss = table.shallow_copy(Boss)
+FinalBoss.scream_a = Boss.dying_a  -- переименовка для читаемости кода
+FinalBoss.start_hp = 300
+-- FinalBoss.attack_modes = {'shotgun', 'shotgun', 'shotgun', 'shotgun', 'minigun', 'minigun', 'minigun', 'balloon', 'balloon', 'mortar', 'mortar'}
+FinalBoss.attack_modes = {'balloon'}
+function FinalBoss:new(x, y, palette)
+    obj = {
+        sprite = Boss.default_a,
+        x = x, y = y, v = Boss.start_v,
+        beard_frame = 1,
+        hair_cnt = 0, hair_y = {0, 0, 0, 0, 0},
+        hitbox = Hitbox:new(x+4, y+4, x+19, y+16),
+        px = 0, py = 0, hp = FinalBoss.start_hp,
+        mode = 'prelude',
+        charge = 0, attack_mode = 'nil',
+        mortar_charge = 0,
+        suffer_flag = false,
+        palette = palette,
+        negative = false,
+        flip = 0
+    }
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
 
+function FinalBoss:call_mode()
+    if self.mode == 'default' then
+        self:default_update()
+    elseif self.mode == 'opening_mouth' then
+        self:opening_mouth_update()
+    elseif self.mode == 'openned_mouth' then
+        self:openned_mouth_update()
+    elseif self.mode == 'attack' then
+        self:attack_update()
+    elseif self.mode == 'ulta' then
+        self:ulta_update()
+    elseif self.mode  == 'prelude' then
+        self:prelude_update()
+    end
+end
+
+function FinalBoss:ulta_update()
+    self.charge = self.charge + 1
+    if not negative and self.charge >= 300 then
+        negative_colorChange(self.palette)
+    end
+    if self.charge >= 340 then
+        self.mode = 'default'
+    end
+end
+
+function FinalBoss:prelude_update()
+    if self.x >= 99 then
+        self.mode = 'ulta'
+    end
+end
+
+function FinalBoss:shoot()
+    if self.mode == 'ulta' then
+        if self.charge <= 160 then
+            local r = self.charge % 10
+            local bullet = false
+            if r == 0 then
+                bullet = Bullet:new(0, math.random(0, 135), self.x + 13, self.y + 13)
+            elseif r == 1 then
+                bullet = Bullet:new(math.random(0, 239), 0, self.x + 13, self.y + 13)
+            elseif r == 2 then
+                bullet = Bullet:new(238, math.random(0, 135), self.x + 13, self.y + 13)
+            elseif r == 3 then
+                bullet = Bullet:new(math.random(0, 239), 134, self.x + 13, self.y + 13)
+            else
+                return false
+            end
+            bullet.boss_ulta = true
+            return bullet
+        end
+        if self.charge >= 300 then
+            local r = self.charge % 4
+            local bullet = false
+            if r == 0 then
+                bullet = Bullet:new(self.x + 13, self.y + 13, 0, math.random(0, 135))
+            elseif r == 1 then
+                bullet = Bullet:new(self.x + 13, self.y + 13, math.random(0, 239), 0)
+            elseif r == 2 then
+                bullet = Bullet:new(self.x + 13, self.y + 13, 238, math.random(0, 135))
+            elseif r == 3 then
+                bullet = Bullet:new(self.x + 13, self.y + 13, math.random(0, 239), 134)
+            else
+                return false
+            end
+            return bullet
+        end
+    end
+    if self.mode ~= 'attack' then
+        return false
+    end
+    if self.attack_mode == 'shotgun' then
+        return ImprovedBullet:new(1.4, self.x+13, self.y+13, self.px + math.random(-24, 30), self.py + math.random(-24, 30))
+    elseif self.attack_mode == 'minigun' then
+        if math.random(0, 7) == 0 then
+            local x = self.px+math.random(-2, 8)
+            local y = self.py+math.random(-2, 8)
+            local i = 0
+            while not self:bomb_check(x, y) do
+                i = i + 1
+                x = self.px+math.random(-2-i, 8+i)
+                y = self.py+math.random(-2-i, 8+i)
+            end
+            return Bomb:new(self.x+13, self.y+13, x, y)
+        end
+    elseif self.attack_mode == 'mortar' then
+        if self.mortar_charge >= 12 then
+            self.mortar_charge = 0
+            return Bomb:new(self.x+13, self.y+13, math.random(50, 210), self.y+13)
+        end
+    elseif self.attack_mode == 'balloon' and self.charge == 10 then
+        if self.flip == 1 then
+            return Balloon:new(self.x+13, self.y+13, self.x - 50, self.y+13)
+        end
+        return Balloon:new(self.x+13, self.y+13, self.x + 70, self.y+13)
+    end
+    return false
+end
+
+function FinalBoss:focus(x, y)
+    self.px = x; self.py = y
+    if x <= self.x + 5 then
+        self.flip = 1
+    else
+        self.flip = 0
+    end
+end
+
+function FinalBoss:moving()
+    if self.mode == 'prelude' then
+        self.x = self.x + 1
+        self.hitbox:set_xy(self.x+4, self.y+4)
+        return
+    end
+    if self.mode == 'ulta' then
+        return
+    end
+    if self.attack_mode == 'minigun' then
+        return
+    end
+    if self.y <= 1 or self.y+18 >= 136-1 then
+        self.v = -self.v
+    end
+    self.y = self.y + self.v
+    self.hitbox:set_xy(self.x+4, self.y+4)
+end
+
+function FinalBoss:bomb_check(x, y)
+    -- проверяет, что бомба не выходит за пределы поля и не прибьёт босса
+    b = HitCircle:new(x-10, y-10, 25)
+    return x > 0 and y > 0 and x <= 238 and y <= 134 and (not b:collide(self.hitbox))
+end
+
+function FinalBoss:opening_mouth_update()
+    if self.sprite:animation_end() then
+        self.mode = 'openned_mouth'
+        self.attack_mode = FinalBoss.attack_modes[math.random(1, #FinalBoss.attack_modes)]
+        self.sprite = Boss.openned_mouth_a:copy()
+        -- if self.attack_mode == 'mortar' then
+        --     self.v = math.sign(self.v) * Boss.start_v * 2.5
+        -- end
+    end
+end
+
+function FinalBoss:openned_mouth_update()
+    if self.charge >= 100 then
+        self.mode = 'attack'
+        self.sprite = Boss.attack_a:copy()
+        self.charge = 0
+        return
+    end
+    if self.attack_mode == 'shotgun' then
+        self.charge = self.charge + 100/15
+    elseif self.attack_mode == 'minigun' then
+        self.charge = self.charge + 100/30
+    elseif self.attack_mode == 'mortar' then
+        self.charge = self.charge + 100/60
+    elseif self.attack_mode == 'balloon' then
+        self.charge = self.charge + 100/30
+    end
+end
+
+function FinalBoss:attack_update()
+    if self.charge >= 100 then
+        self.charge = 0
+        self.mode = 'default'
+        self.sprite = Boss.default_a:copy()
+        self.v = math.sign(self.v) * Boss.start_v
+        return
+    end
+    if self.attack_mode == 'shotgun' then
+        self.charge = self.charge + 100/10
+    elseif self.attack_mode == 'minigun' then
+        self.charge = self.charge + 100/90
+    elseif self.attack_mode == 'mortar' then
+        self.charge = self.charge + 100/120
+        self.mortar_charge = self.mortar_charge + 1
+    elseif self.attack_mode == 'balloon' then
+        self.charge = self.charge + 10  -- 100/10
+    end
+end
 --
 
 
@@ -1123,6 +1345,33 @@ end
 
 
 --
+Balloon = table.shallow_copy(Bomb)
+function Balloon:boom_update()
+    if self.detonate_charge <= 0 then
+        self.mode = 'vanish'
+        self:take_damage(1)
+        self.sprite = Bomb.vanish_a:copy()
+    end
+    if math.abs(self.v) ~= Boss.start_v then
+        self.v = -Boss.start_v
+    end
+    if self.y <= 1 then
+        self.v = Boss.start_v
+    end
+    if self.y+25 >= 136-1 then
+        self.v = -Boss.start_v
+    end
+    self.y = self.y + self.v
+    self.hitbox:set_xy(self.x+4, self.y+4)
+    self.hitcircle:set_xy(self.x-10, self.y-10)
+    --
+    self.detonate_charge = self.detonate_charge - 0.1
+    self:draw()
+end
+--
+
+
+--
 Bullet = table.shallow_copy(Body)
 Bullet.flight_a = Sprite:new({260}, 1)
 function Bullet:new(x, y, fx, fy)
@@ -1131,7 +1380,8 @@ function Bullet:new(x, y, fx, fy)
         x = x, y = y,
         dx = 0, dy = 0,
         v = 1, marker = 'bullet',
-        hitbox = Hitbox:new(x, y, x+1, y+1)
+        hitbox = Hitbox:new(x, y, x+1, y+1),
+        fx = fx, fy = fy, hp = 1, boss_ulta = false  -- for final boss
     }
 
     if fx == x then
@@ -1157,11 +1407,62 @@ function Bullet:new(x, y, fx, fy)
 end
 
 function Bullet:update()
+    if self.boss_ulta and self:check() then
+        self:take_damage(1)
+    end
     self.x = self.x + self.dx
     self.y = self.y + self.dy
     self.hitbox:set_xy(self.x, self.y)
     self.sprite:next_frame()
     self:draw()
+end
+
+function Bullet:check()
+    if (self.dx < 0 and self.x <= self.fx) or
+            (self.dx > 0 and self.x >= self.fx) or
+            (self.dy < 0 and self.y <= self.fy) or
+            (self.dy > 0 and self.y >= self.fy) then
+        return true
+    end
+    return false
+end
+--
+
+
+--
+ImprovedBullet = table.shallow_copy(Bullet)
+-- Bullet.flight_a = Sprite:new({260}, 1)
+function ImprovedBullet:new(v, x, y, fx, fy)
+    obj = {
+        sprite = Bullet.flight_a, flip = 0,
+        x = x, y = y,
+        dx = 0, dy = 0,
+        v = v, marker = 'bullet',
+        hitbox = Hitbox:new(x, y, x+1, y+1),
+        fx = fx, fy = fy, hp = 1, boss_ulta = false  -- for final boss
+    }
+
+    if fx == x then
+        fx = fx + 0.0000001
+    end
+    d = math.abs(fy - y) / math.abs(fx - x)
+    -- dx = obj['v'] / math.sqrt(1 + d*d)
+    dx = v / math.sqrt(1 + d*d)
+    dy = dx * d
+
+    kx = 1; ky = 1
+    if fx < x then
+        kx = -1
+    end
+    if fy < y then
+        ky = -1
+    end
+    obj['dx'] = kx * dx
+    obj['dy'] = ky * dy
+
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
 end
 --
 
@@ -1222,7 +1523,7 @@ ENEMIES_PER_LVL = {2, 2, 4, 6, 0, 3, 0, 0, 4, 0}
 BOMBERS_PER_LVL = {0, 0, 0, 0, 1, 2, 0, 6, 3, 0}
 COORDS_MENU = {20, 28, 36}
 COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76}
-COORDS_DIFFICULTY_MENU = {20, 28, 36}
+COORDS_GAME_MODE_MENU = {20, 28, 36, 44}
 PALETTES = {'Old', 'Velvet', 'Tetris', 'Milk', 'Green', 'Chess', 'Invisible!'}
 ANGLE = Sprite:new({0}, 1)
 
@@ -1236,8 +1537,10 @@ function Game:new()
         menu_pos = 1, count = 0,
         secret_palette = 0, current_palette = 6,
         boss = false, angles = make_angles(),
-        difficulty = 'normal', dialog_window = false,
-        boss = false, cartoon = false
+        dialog_window = false,
+        boss = false, cartoon = false, finalBoss = false,
+        -- game_mode = 'default',
+        x2speed = false, one_life = false, boss_rush = false
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -1283,7 +1586,16 @@ function Game:build_lvl()
         self:build_boss_lvl()
         return
     end
+    if self:real_lvl() == 10 then
+        self:build_finalBoss_lvl()
+        return
+    end
     self:build_enemies(ENEMIES_PER_LVL[self:real_lvl()], BOMBERS_PER_LVL[self:real_lvl()])
+end
+
+function Game:build_finalBoss_lvl()
+    self.finalBoss = true
+    table.insert(self.enemies, FinalBoss:new(0, 60, self.current_palette))
 end
 
 function Game:update()
@@ -1314,8 +1626,8 @@ function Game:update()
         self:palette_menu_update()
         return
     end
-    if self.mode == 'difficulty_menu' then
-        self:difficulty_menu_update()
+    if self.mode == 'game_mode_menu' then
+        self:game_mode_menu_update()
         return
     end
     if self.mode == 'lvl_complete' then
@@ -1358,16 +1670,12 @@ function Game:build_second_lvl()
 end
 
 function Game:menu_update()
-    if self.difficulty == 'normal' then
-        print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
-    elseif self.difficulty == 'hard' then
-        print('Level ' .. tostring(self.lvl) .. ' / 7', 2, 2, 8)
-    end
+    self:print_lvl()
     print('Use arrows and [z] to choose', 2, 118, 8)
     -- ниже -- пункты меню
     print('Play', 120, 20, 8)
     print('Change palette', 120, 28, 8)
-    print('Change difficulty', 120, 36, 8)
+    print('Change game mode', 120, 36, 8)
     print('~', 112, COORDS_MENU[self.menu_pos], 8)
 
     if btnp(0) then
@@ -1384,18 +1692,14 @@ function Game:menu_update()
         elseif self.menu_pos == 2 then
             self.mode = 'palette_menu'
         elseif self.menu_pos == 3 then
-            self.mode = 'difficulty_menu'
+            self.mode = 'game_mode_menu'
             self.menu_pos = 2
         end
     end
 end
 
 function Game:palette_menu_update()
-    if self.difficulty == 'normal' then
-        print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
-    elseif self.difficulty == 'hard' then
-        print('Level ' .. tostring(self.lvl) .. ' / 7', 2, 2, 8)
-    end
+    self:print_lvl()
     print('Use arrows and [z] to choose', 2, 118, 8)
 
     print('Back', 120, 20, 8)
@@ -1431,32 +1735,46 @@ function Game:palette_menu_update()
     print('~', 112, COORDS_PALETTE_MENU[self.menu_pos], 8)    
 end
 
-function Game:difficulty_menu_update()
-    if self.difficulty == 'normal' then
-        print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
-    elseif self.difficulty == 'hard' then
+function Game:print_lvl()
+    if self.boss_rush then
+        print('Level ' .. tostring(self.lvl) .. ' / 2', 2, 2, 8)
+        return
+    elseif self.one_life then
         print('Level ' .. tostring(self.lvl) .. ' / 7', 2, 2, 8)
+        return
+    else
+        print('Level ' .. tostring(self.lvl) .. ' / 10', 2, 2, 8)
+        return
     end
+end
+
+function Game:game_mode_menu_update()
+    self:print_lvl()
     print('Use arrows and [z] to choose', 2, 118, 8)
     -- ниже -- пункты меню
     print('Back', 120, 20, 8)
-    if self.difficulty == 'normal' then
-        print('Normal!', 120, 28, 8)
+    if self.boss_rush then
+        print('Boss rush!', 120, 28, 8)
     else
-        print('Normal', 120, 28, 8)
+        print('Boss rush', 120, 28, 8)
     end
-    if self.difficulty == 'hard' then
-        print('Hard!', 120, 36, 8)
+    if self.one_life then
+        print('One life!', 120, 36, 8)
     else
-        print('Hard', 120, 36, 8)
+        print('One life', 120, 36, 8)
     end
-    print('~', 112, COORDS_DIFFICULTY_MENU[self.menu_pos], 8)
+    if self.x2speed then
+        print('x2 speed!', 120, 44, 8)
+    else
+        print('x2 speed', 120, 44, 8)
+    end
+    print('~', 112, COORDS_GAME_MODE_MENU[self.menu_pos], 8)
 
     if btnp(0) then
-        self.menu_pos = (#COORDS_DIFFICULTY_MENU + self.menu_pos - 2) % #COORDS_DIFFICULTY_MENU + 1
+        self.menu_pos = (#COORDS_GAME_MODE_MENU + self.menu_pos - 2) % #COORDS_GAME_MODE_MENU + 1
     end
     if btnp(1) then
-        self.menu_pos = self.menu_pos % #COORDS_DIFFICULTY_MENU + 1
+        self.menu_pos = self.menu_pos % #COORDS_GAME_MODE_MENU + 1
     end
     if btnp(4) then
         if self.menu_pos == 1 then
@@ -1469,15 +1787,17 @@ end
 
 function Game:dialog_window_update()
     self.dialog_window:update()
-    if self.mode == 'difficulty_menu' then
+    if self.mode == 'game_mode_menu' then
         if btnp(4) then
             if self.dialog_window:get_command() == 'Ok' then
                 self.dialog_window = false
                 self.lvl = 1
                 if self.menu_pos == 2 then
-                    self.difficulty = 'normal'
+                    self.boss_rush = not self.boss_rush
                 elseif self.menu_pos == 3 then
-                    self.difficulty = 'hard'
+                    self.one_life = not self.one_life
+                elseif self.menu_pos == 4 then
+                    self.x2speed = not self.x2speed
                 end
             elseif self.dialog_window:get_command() == 'Cancel' then
                 self.dialog_window = false
@@ -1568,7 +1888,7 @@ function Game:action_update()
             self:death()
         end
         b:update()
-        if b.x < 0 or b.x > 240 or b.y < 0 or b.y > 136 then
+        if b:is_dead() or b.x < 0 or b.x > 240 or b.y < 0 or b.y > 136 then
             table.remove(self.bullets, _)
         end
     end
@@ -1603,7 +1923,7 @@ function Game:death()
     self.mode = 'death'
     self.plr:take_damage(1)
     self.plr:death()
-    if self.difficulty == 'hard' then
+    if self.one_life then
         self.lvl = 1
     end
 end
@@ -1663,20 +1983,25 @@ function Game:game_final()
 end
 
 function Game:real_lvl()
-    if self.difficulty == 'normal' then
-        return self.lvl
+    if self.boss_rush then
+        return self.lvl == 1 and 7 or 10
+    elseif self.one_life then
+        return self.lvl + (self.lvl >= 5 and 3 or 2)
     end
-    -- if self.difficulty == 'hard'
-    return self.lvl + (self.lvl >= 3 and 3 or 2)
+    return self.lvl
 end
 --
 
 
 game = Game:new()
-game.lvl = 7
+game.lvl = 10
 function TIC()
     cls(C0)
     game:update()
+    if game.x2speed and game.mode == 'action' then
+        cls(C0)
+        game:update()
+    end
 end
 
 -- <TILES>
