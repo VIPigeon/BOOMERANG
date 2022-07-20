@@ -1,7 +1,6 @@
 
 C0 = 0  -- прозрачный цвет
 
-
 --  блок со сменой цвета палитры
 ADDR = 0x3FC0
 eADDR = 0x4000
@@ -49,6 +48,158 @@ function negative_colorChange(pn)
     savePalette()
     exportpal(palette)
 end
+
+
+--
+BOSS_PIXELS = {
+-- hair
+{x = 1, y = 1},
+{x = 2, y = 2},
+{x = 3, y = 3},
+{x = 5, y = 1},
+{x = 6, y = 2},
+{x = 7, y = 3},
+{x = 9, y = 1},
+{x = 10, y = 2},
+{x = 11, y = 3},
+{x = 13, y = 1},
+{x = 14, y = 2},
+{x = 15, y = 3},
+{x = 17, y = 1},
+{x = 18, y = 2},
+{x = 19, y = 3},
+-- top head line
+{x = 3, y = 4},
+{x = 4, y = 4},
+{x = 5, y = 4},
+{x = 6, y = 4},
+{x = 7, y = 4},
+{x = 8, y = 4},
+{x = 9, y = 4},
+{x = 10, y = 4},
+{x = 11, y = 4},
+{x = 12, y = 4},
+{x = 13, y = 4},
+{x = 14, y = 4},
+{x = 15, y = 4},
+{x = 16, y = 4},
+{x = 17, y = 4},
+{x = 18, y = 4},
+{x = 19, y = 4},
+-- nose
+{x = 12, y = 9},
+{x = 13, y = 9},
+{x = 12, y = 10},
+{x = 13, y = 10},
+{x = 13, y = 11},
+-- beard
+{x = 5, y = 8},
+
+{x = 4, y = 9},
+{x = 5, y = 9},
+{x = 6, y = 9},
+{x = 19, y = 9},
+
+{x = 4, y = 10},
+{x = 5, y = 10},
+{x = 6, y = 10},
+{x = 7, y = 10},
+{x = 8, y = 10},
+{x = 9, y = 10},
+{x = 10, y = 10},
+{x = 15, y = 10},
+{x = 16, y = 10},
+{x = 17, y = 10},
+{x = 18, y = 10},
+{x = 19, y = 10},
+
+{x = 5, y = 11},
+{x = 6, y = 11},
+{x = 7, y = 11},
+{x = 8, y = 11},
+{x = 9, y = 11},
+{x = 10, y = 11},
+{x = 15, y = 11},
+{x = 16, y = 11},
+{x = 17, y = 11},
+{x = 18, y = 11},
+
+{x = 6, y = 12},
+{x = 7, y = 12},
+{x = 8, y = 12},
+{x = 9, y = 12},
+{x = 10, y = 12},
+{x = 11, y = 12},
+{x = 15, y = 12},
+{x = 16, y = 12},
+{x = 17, y = 12},
+{x = 18, y = 12},
+
+{x = 7, y = 13},
+{x = 8, y = 13},
+{x = 9, y = 13},
+{x = 10, y = 13},
+{x = 11, y = 13},
+{x = 12, y = 13},
+{x = 13, y = 13},
+{x = 14, y = 13},
+{x = 15, y = 13},
+{x = 16, y = 13},
+{x = 17, y = 13},
+
+{x = 7, y = 14},
+{x = 8, y = 14},
+{x = 9, y = 14},
+{x = 10, y = 14},
+{x = 11, y = 14},
+{x = 12, y = 14},
+{x = 13, y = 14},
+{x = 14, y = 14},
+{x = 15, y = 14},
+{x = 16, y = 14},
+{x = 17, y = 14},
+
+{x = 8, y = 15},
+{x = 9, y = 15},
+{x = 10, y = 15},
+{x = 11, y = 15},
+{x = 12, y = 15},
+{x = 13, y = 15},
+{x = 14, y = 15},
+{x = 15, y = 15},
+{x = 16, y = 15},
+
+{x = 9, y = 16},
+{x = 10, y = 16},
+{x = 11, y = 16},
+{x = 12, y = 16},
+{x = 13, y = 16},
+{x = 14, y = 16},
+{x = 15, y = 16},
+
+{x = 10, y = 17},
+{x = 11, y = 17},
+{x = 12, y = 17},
+{x = 13, y = 17},
+{x = 14, y = 17},
+
+{x = 11, y = 18},
+{x = 12, y = 18},
+{x = 13, y = 18}
+}
+
+function table.shuffle(t)
+    res = {}
+    for _, e in ipairs(t) do
+        local i = math.random(1, #t)
+        while res[i] ~= nil do
+            i = math.random(1, #t)
+        end
+        res[i] = e
+    end
+    return res
+end
+--
 
 
 function math.sign(x)
@@ -278,6 +429,134 @@ end
 
 
 --
+FinalCartoon = table.shallow_copy(Cartoon)
+function FinalCartoon:new(boss)
+    obj = {
+        t = 0, limit = 900 + 7*60,
+        name = 'Final',
+        boss = boss,
+        pixels = table.shuffle(BOSS_PIXELS), i = 0,
+        bullets = {}, fall_y = 6
+    }
+    -- obj['boss'].sprite = Boss.dying_a:copy()
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function FinalCartoon:update()
+    if self.t == 0 then
+        self.boss.sprite = Sprite:new({192}, 3)
+    end
+    if self.t <= 300 or self.t >= 900 then
+        self.t = self.t + 1
+    end
+    if self.t >= 900 then
+        self:sunglasses_fall()
+    elseif self.t >= 300 then
+        self:decay()
+    elseif self.t >= 100 then
+        Boss.sunglasses:draw(self.boss.x + 3, self.boss.y + 6, 0)
+        self.boss.sprite:draw(self.boss.x, self.boss.y, 0)
+        self.boss:draw_health_bar()
+        rect(self.boss.x + 26, self.boss.y, 18*5 + 7, 9, 8)
+        print("Not bad, hatter", self.boss.x + 28, self.boss.y + 2, 0)
+    else
+        Boss.sunglasses:draw(self.boss.x + 3, self.boss.y + 6, 0)
+        self.boss.sprite:draw(self.boss.x, self.boss.y, 0)
+        self.boss:draw_health_bar()
+    end
+end
+
+function FinalCartoon:decay()
+    self.i = self.i + 1
+    if self.i > #self.pixels then
+        self.t = 900  -- marker
+        return
+    end
+    Boss.sunglasses:draw(self.boss.x + 3, self.boss.y + 6, 0)
+    self.boss.sprite:draw(self.boss.x, self.boss.y, 0)
+    self.boss:draw_health_bar()
+    for j = 1, self.i do
+        rect(self.boss.x + self.pixels[j].x, self.boss.y + self.pixels[j].y, 1, 1, 0)
+    end
+    table.insert(self.bullets, 
+        ImprovedBullet:new(-1, PIXEL, self.boss.x + self.pixels[self.i].x, self.boss.y + self.pixels[self.i].y, self.boss.x + 10, self.boss.y + 9))
+    for _, b in ipairs(self.bullets) do
+        b:update()
+        if b.x <= 0 or b.x >= 240 or b.y <= 0 or b.y >= 136 then
+            table.remove(self.bullets, _)
+        end
+    end
+end
+
+function FinalCartoon:sunglasses_fall()
+    while #self.bullets ~= 0 do
+        for _, b in ipairs(self.bullets) do
+            b:update()
+            if b.x <= 0 or b.x >= 240 or b.y <= 0 or b.y >= 136 then
+                table.remove(self.bullets, _)
+            end
+        end
+        Boss.sunglasses:draw(self.boss.x + 3, self.boss.y + self.fall_y, 0)
+        return
+    end
+    if self.fall_y < 18 then
+        self.fall_y = self.fall_y + 0.2
+    end
+    Boss.sunglasses:draw(self.boss.x + 3, self.boss.y + self.fall_y, 0)
+end
+--
+
+
+--
+FirstCartoon = table.shallow_copy(Cartoon)
+INF = 99999999
+function FirstCartoon:new()
+    obj = {
+        t = 0, limit = 400,
+        name = 'First',
+        flag = false,
+        plr = PseudoPlayer:new(-10, 54),
+        -- plr = 1,
+        boomerang_status = 0
+    }
+    -- чистая магия!
+    setmetatable(obj, self)
+    self.__index = self; return obj
+end
+
+function FirstCartoon:update()
+    if self.t > 0 then
+        self.t = self.t + 1
+        if self.t <= 200 then
+            print('BOOMERANG', 90, 53, 8)
+        else
+            VCROC:draw(108, 54, 0)
+            print('Made by', 100, 76, 8)
+            print('V. Crocodile', 100, 84, 8)
+        end
+        return
+    end
+    -- trace(self.plr)
+    if self.plr.x >= 60 then
+        self.flag = true
+        self.plr:autothrow()
+    end
+    self.plr:update(self.flag)
+    -- if self.flag then
+        -- print('Press [z]', 77, 110, 8)
+    -- end
+    if self.plr.boomerang and self.boomerang_status == 0 then
+        self.boomerang_status = 1
+    elseif not self.plr.boomerang and self.boomerang_status == 1 then
+        self.t = 1
+    end
+end
+--
+
+
+--
 Hitbox = {}
 function Hitbox:new(x1, y1, x2, y2)
     obj = {
@@ -386,6 +665,7 @@ function Sprite:copy()
 end
 --
 
+VCROC = Sprite:new({40}, 3)
 
 --  базовый класс
 Body = {}
@@ -548,6 +828,77 @@ function Player:set_start_stats()
     self.sprite = Player.born_a:copy()
     self.born_flag = true
     self.hitbox = Hitbox:new(self.x+2, self.y+1, self.x+5, self.y+7)
+end
+--
+
+
+--
+PseudoPlayer = table.shallow_copy(Player)
+function PseudoPlayer:update(cartflag)
+    if self:is_dead() then
+        self:death_update()
+        return
+    end
+    if self.born_flag then
+        if not self:born_update() then  -- если рождение закончилось
+            self.sprite = Player.stay_a:copy()
+        end
+        return
+    end
+
+    flag = false
+    if math.abs(self.dx) + math.abs(self.dy) ~= 0 then  -- is moving
+        flag = true
+    end
+
+    self.dx = 0; self.dy = 0
+    -- if not cartflag then
+    self.dx = self.dx + 0.7
+    -- end
+
+    k = 1
+    if self.dx * self.dy ~= 0 then
+        k = 1 / math.sqrt(2)
+    end
+
+    if math.abs(self.dx) + math.abs(self.dy) ~= 0 then  -- is moving
+        self.last_dx = self.dx; self.last_dy = self.dy
+        if not flag then
+            self.sprite = Player.run_a:copy()
+        end
+    else
+        self.sprite = Player.stay_a:copy()
+    end
+
+    if self.dx == -1 then
+        self.flip = 1
+    elseif self.dx == 1 then
+        self.flip = 0
+    end
+
+    self.sprite:next_frame()
+    self.x = fence(self.x + self.dx * self.v * k, 0, 240 - 8)
+    self.y = fence(self.y + self.dy * self.v * k, 0, 136 - 8)
+    self.hitbox:set_xy(self.x+2, self.y+1)
+    self:draw()
+
+    -- if btnp(4) and not self.boomerang and cartflag then
+    --     self:shoot()
+    -- end
+    if self.boomerang then
+        self.boomerang:focus(self.x, self.y)
+        self.boomerang:update()
+        if self.boomerang.hitbox:collide(self.hitbox) and
+                self.boomerang.v < self.v then
+            self.boomerang = false
+        end
+    end
+end
+
+function PseudoPlayer:autothrow()
+    if not self.boomerang then
+        self:shoot()
+    end
 end
 --
 
@@ -1010,12 +1361,12 @@ end
 --
 FinalBoss = table.shallow_copy(Boss)
 FinalBoss.scream_a = Boss.dying_a  -- переименовка для читаемости кода
-FinalBoss.start_hp = 300
--- FinalBoss.attack_modes = {'shotgun', 'shotgun', 'shotgun', 'shotgun', 'minigun', 'minigun', 'minigun', 'balloon', 'balloon', 'mortar', 'mortar'}
-FinalBoss.attack_modes = {'balloon'}
+FinalBoss.start_hp = 320
+-- FinalBoss.start_hp = 10
+FinalBoss.attack_modes = {'shotgun', 'minigun', 'mortar'}
 function FinalBoss:new(x, y, palette)
     obj = {
-        sprite = Boss.default_a,
+        sprite = FinalBoss.scream_a,
         x = x, y = y, v = Boss.start_v,
         beard_frame = 1,
         hair_cnt = 0, hair_y = {0, 0, 0, 0, 0},
@@ -1027,7 +1378,8 @@ function FinalBoss:new(x, y, palette)
         suffer_flag = false,
         palette = palette,
         negative = false,
-        flip = 0
+        flip = 0,
+        ulta_charge = 0
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -1035,6 +1387,14 @@ function FinalBoss:new(x, y, palette)
 end
 
 function FinalBoss:call_mode()
+    self.ulta_charge = self.ulta_charge + 1
+    if self.y >= 60 and self.y <= 70 and self.ulta_charge >= 40*60 and self.mode ~= 'attack' then
+        self.sprite = FinalBoss.scream_a:copy()
+        self.mode = 'ulta'
+        self.ulta_charge = 0
+        self.charge = -70
+    end
+
     if self.mode == 'default' then
         self:default_update()
     elseif self.mode == 'opening_mouth' then
@@ -1063,11 +1423,12 @@ end
 function FinalBoss:prelude_update()
     if self.x >= 99 then
         self.mode = 'ulta'
+        self.sprite = FinalBoss.scream_a:copy()
     end
 end
 
 function FinalBoss:shoot()
-    if self.mode == 'ulta' then
+    if self.mode == 'ulta' and self.charge >= 0 then
         if self.charge <= 160 then
             local r = self.charge % 10
             local bullet = false
@@ -1086,6 +1447,7 @@ function FinalBoss:shoot()
             return bullet
         end
         if self.charge >= 300 then
+            self.sprite = Boss.attack_a
             local r = self.charge % 4
             local bullet = false
             if r == 0 then
@@ -1106,29 +1468,20 @@ function FinalBoss:shoot()
         return false
     end
     if self.attack_mode == 'shotgun' then
-        return ImprovedBullet:new(1.4, self.x+13, self.y+13, self.px + math.random(-24, 30), self.py + math.random(-24, 30))
+        if self.charge <= 15 or self.charge >= 85 then
+            return Bullet:new(self.x+13, self.y+13, self.px + math.random(-24, 30), self.py + math.random(-24, 30))
+        end
+        -- return ImprovedBullet:new(1.4, self.x+13, self.y+13, self.px + math.random(-24, 30), self.py + math.random(-24, 30))
     elseif self.attack_mode == 'minigun' then
-        if math.random(0, 7) == 0 then
-            local x = self.px+math.random(-2, 8)
-            local y = self.py+math.random(-2, 8)
-            local i = 0
-            while not self:bomb_check(x, y) do
-                i = i + 1
-                x = self.px+math.random(-2-i, 8+i)
-                y = self.py+math.random(-2-i, 8+i)
-            end
-            return Bomb:new(self.x+13, self.y+13, x, y)
-        end
+        -- if math.random(0, 3) == 0 then
+        return ImprovedBullet:new(1.4, Bullet.flight_a, self.x+13, self.y+13, self.px+math.random(-6, 12), self.py+math.random(-6, 12))
+        -- end
     elseif self.attack_mode == 'mortar' then
-        if self.mortar_charge >= 12 then
-            self.mortar_charge = 0
-            return Bomb:new(self.x+13, self.y+13, math.random(50, 210), self.y+13)
+        if self.flip == 0 then
+            return Bomb:new(self.x+13, self.y+13, math.random(self.x+35, 210), math.random(9, 124))
+        elseif self.flip == 1 then
+            return Bomb:new(self.x+13, self.y+13, math.random(8, self.x-18), math.random(9, 124))
         end
-    elseif self.attack_mode == 'balloon' and self.charge == 10 then
-        if self.flip == 1 then
-            return Balloon:new(self.x+13, self.y+13, self.x - 50, self.y+13)
-        end
-        return Balloon:new(self.x+13, self.y+13, self.x + 70, self.y+13)
     end
     return false
 end
@@ -1151,9 +1504,9 @@ function FinalBoss:moving()
     if self.mode == 'ulta' then
         return
     end
-    if self.attack_mode == 'minigun' then
-        return
-    end
+    -- if self.attack_mode == 'minigun' then
+    --     return
+    -- end
     if self.y <= 1 or self.y+18 >= 136-1 then
         self.v = -self.v
     end
@@ -1186,13 +1539,11 @@ function FinalBoss:openned_mouth_update()
         return
     end
     if self.attack_mode == 'shotgun' then
-        self.charge = self.charge + 100/15
+        self.charge = self.charge + 100/20
     elseif self.attack_mode == 'minigun' then
-        self.charge = self.charge + 100/30
+        self.charge = self.charge + 100/90
     elseif self.attack_mode == 'mortar' then
         self.charge = self.charge + 100/60
-    elseif self.attack_mode == 'balloon' then
-        self.charge = self.charge + 100/30
     end
 end
 
@@ -1205,14 +1556,11 @@ function FinalBoss:attack_update()
         return
     end
     if self.attack_mode == 'shotgun' then
-        self.charge = self.charge + 100/10
+        self.charge = self.charge + 100/76
     elseif self.attack_mode == 'minigun' then
-        self.charge = self.charge + 100/90
-    elseif self.attack_mode == 'mortar' then
         self.charge = self.charge + 100/120
-        self.mortar_charge = self.mortar_charge + 1
-    elseif self.attack_mode == 'balloon' then
-        self.charge = self.charge + 10  -- 100/10
+    elseif self.attack_mode == 'mortar' then
+        self.charge = self.charge + 100/8
     end
 end
 --
@@ -1432,9 +1780,9 @@ end
 --
 ImprovedBullet = table.shallow_copy(Bullet)
 -- Bullet.flight_a = Sprite:new({260}, 1)
-function ImprovedBullet:new(v, x, y, fx, fy)
+function ImprovedBullet:new(v, sprite, x, y, fx, fy)
     obj = {
-        sprite = Bullet.flight_a, flip = 0,
+        sprite = sprite:copy(), flip = 0,
         x = x, y = y,
         dx = 0, dy = 0,
         v = v, marker = 'bullet',
@@ -1520,7 +1868,7 @@ end
 --
 Game = {}
 ENEMIES_PER_LVL = {2, 2, 4, 6, 0, 3, 0, 0, 4, 0}
-BOMBERS_PER_LVL = {0, 0, 0, 0, 1, 2, 0, 6, 3, 0}
+BOMBERS_PER_LVL = {0, 0, 0, 0, 1, 2, 0, 6, 2, 0}
 COORDS_MENU = {20, 28, 36}
 COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76}
 COORDS_GAME_MODE_MENU = {20, 28, 36, 44}
@@ -1538,9 +1886,10 @@ function Game:new()
         secret_palette = 0, current_palette = 6,
         boss = false, angles = make_angles(),
         dialog_window = false,
-        boss = false, cartoon = false, finalBoss = false,
+        boss = false, cartoon = FirstCartoon:new(), finalBoss = false,
         -- game_mode = 'default',
-        x2speed = false, one_life = false, boss_rush = false
+        x2speed = false, one_life = false, boss_rush = false,
+        final_charge = 0
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -1582,6 +1931,10 @@ function Game:build_lvl()
         self:build_second_lvl()
         return
     end
+    if self:real_lvl() == 5 then
+        self:build5lvl()
+        return
+    end
     if self:real_lvl() == 7 then
         self:build_boss_lvl()
         return
@@ -1595,7 +1948,7 @@ end
 
 function Game:build_finalBoss_lvl()
     self.finalBoss = true
-    table.insert(self.enemies, FinalBoss:new(0, 60, self.current_palette))
+    table.insert(self.enemies, FinalBoss:new(-30, 60, self.current_palette))
 end
 
 function Game:update()
@@ -1604,6 +1957,10 @@ function Game:update()
     end
     if self.cartoon then
         self:cartoon_update()
+        return
+    end
+    if self.mode == 'final' then
+        self:final_update()
         return
     end
     if self.dialog_window then
@@ -1644,17 +2001,22 @@ end
 
 function Game:cartoon_update()
     self.cartoon:update()
-    self.plr:update()
+    if self.cartoon.name ~= 'First' then
+        self.plr:update()
+    end
     -- if self.plr.boomerang then
     --     self.plr.boomerang:update()
     -- end
     if self.cartoon:check() then
         if self.cartoon.name == 'BornBoss' then
             table.insert(self.enemies, self.cartoon:get_boss())
-        elseif self.cartoon.name == 'DeathBoss' then
+        elseif self.cartoon.name == 'DeathBoss' or 
+                self.cartoon.name == 'Final' then
             self.enemies = {}
             self.bullets = {}
             self.bombs = {}
+        elseif self.cartoon.name == 'First' then
+            self.mode = 'menu'
         end
         self.cartoon = false
     end
@@ -1662,6 +2024,10 @@ end
 
 function Game:build_start_lvl()
     table.insert(self.enemies, Enemy:new(16, 80))
+end
+
+function Game:build5lvl()
+    table.insert(self.enemies, Bomber:new(20, 80))
 end
 
 function Game:build_second_lvl()
@@ -1675,7 +2041,7 @@ function Game:menu_update()
     -- ниже -- пункты меню
     print('Play', 120, 20, 8)
     print('Change palette', 120, 28, 8)
-    print('Change game mode', 120, 36, 8)
+    print('Game modes', 120, 36, 8)
     print('~', 112, COORDS_MENU[self.menu_pos], 8)
 
     if btnp(0) then
@@ -1830,6 +2196,14 @@ function Game:action_update()
             self.plr.y = 26
             self.plr.hitbox:set_xy(self.plr.x, self.plr.y)
         end
+    elseif self:real_lvl() == 5 then
+        rect(0, 0, 240, 26, 8)
+        print('Bombs can damage both you', 30, 8, 0)
+        print('and opponents', 30, 16, 0)
+        if self.plr.y < 26 then
+            self.plr.y = 26
+            self.plr.hitbox:set_xy(self.plr.x, self.plr.y)
+        end
     end
 
     for _, e in ipairs(self.enemies) do
@@ -1855,6 +2229,8 @@ function Game:action_update()
         if e:is_dead() and e.sprite:animation_end() then
             if self.boss then
                 self.cartoon = DeathBossCartoon:new(e)
+            elseif self.finalBoss then
+                self.cartoon = FinalCartoon:new(e)
             else
                 table.remove(self.enemies, _)
             end
@@ -1951,13 +2327,13 @@ function Game:lvl_complete_check()
 end
 
 function Game:lvl_complete()
-    if self:real_lvl() == 10 then
-        self:game_final()
-    end
     self.pts = 0
     self.count = 0
     self.lvl = self.lvl + 1
-    self.mode = 'lvl_complete'
+    if self:real_lvl() >= 11 then
+        self.mode = 'final'
+    else self.mode = 'lvl_complete'
+    end
 end
 
 function Game:lvl_complete_update()
@@ -1978,8 +2354,19 @@ function Game:lvl_complete_update()
     self.count = self.count + 1
 end
 
-function Game:game_final()
-    -- body
+function Game:final_update()
+    print('Thank you for playing!', 60, 50, 8)
+    if self.final_charge >= 120 then
+        print('Press [z] to back to the menu', 50, 110, 8)
+    end
+    self.final_charge = self.final_charge + 1
+
+    if btnp(4) and self.final_charge >= 120 then
+        self.lvl = 1
+        self.mode = 'menu'
+        self.final_charge = 0
+        colorChange(self.current_palette)
+    end
 end
 
 function Game:real_lvl()
@@ -1994,7 +2381,7 @@ end
 
 
 game = Game:new()
-game.lvl = 10
+-- game.lvl = 1
 function TIC()
     cls(C0)
     game:update()
@@ -2006,16 +2393,55 @@ end
 
 -- <TILES>
 -- 000:8000000080000000800000008000000080000000800000008000000088888888
+-- 008:8888088880080800800808008888080080080800800808008888088800000000
+-- 009:8080008080880880808080808080008080800080808000808080008000000000
+-- 010:8880888880008008800080088880888880008800800080808880800800000000
+-- 011:0888808008008088080080880888808808008080080080800800808000000000
+-- 012:0808888008080000080800008808088088080080880800800808888000000000
+-- 016:0000000008000800008000800008000800088888000000000000888800080008
+-- 017:0000000008000800008000800008000888888888000000008888888808880080
+-- 018:0000000008000000008000000008000088880000000000008888000088800000
+-- 019:0000000000000008000008880000888800088888008888880088888808888888
+-- 020:0888888888888888888888888888888888888888888888888888888888888888
+-- 021:0000000088000000888800008888800088888800888888808888888088888888
+-- 032:0000080000008880000088880000088800000088000000080000000800000000
+-- 033:8880000800008800888088088880080888880008888888888888888888888888
+-- 034:8800000000080000888800008880000088800000880000008800000080000000
+-- 035:0888888888888888888888888888888888888888888888888888888888888888
+-- 036:8888888888888888888888888888888888888888888888888888888888888888
+-- 037:8888888888888888888888888888888888888888888888888888888888888888
+-- 038:0000000080000000800000008000000080000000800000008000000080000000
+-- 041:0000000000000000000000000000000000000000000000000000008800000088
+-- 042:0000880000008800008800000088000088000000880000000000000000000000
+-- 049:0888888800888880000888000000000000000000000000000000000000000000
+-- 051:0888888808888888008888880088888800088888000088880000088800000008
+-- 052:8888888888888888888888888888888888888888888888888888888888888888
+-- 053:8888888888888888888888808888888088888800888880008888000088000000
+-- 056:0000000000000000888888888888888800000000000000000000000000000000
+-- 057:0000880000008800888888888888888800000000000000000000000000000000
+-- 058:0000000000000000888888888888888800000000000000000000000000000000
+-- 068:0888888800000000000000000000000000000000000000000000000000000000
 -- 128:0888888880008088000008880000000000000000000000000000000000000000
 -- 129:8888888880080888000088800000000000000000000000000000000000000000
 -- 130:8000000000000000000000000000000000000000000000000000000000000000
 -- 192:0000000008000800008000800008000800088888000000000000888800080008
 -- 193:0000000008000800008000800008000888888888000000008888888808880080
 -- 194:0000000008000000008000000008000088880000000000008888000088800000
+-- 195:0000000000000008000008880000888800088888008888880088888808888888
+-- 196:0888888888888888888888888888888888888888888888888888888888888888
+-- 197:0000000088000000888800008888800088888800888888808888888088888888
 -- 208:0000080000008880000088880000088800000088000000080000000800000000
 -- 209:8880000800008800888088088880080888880008888888888888888888888888
 -- 210:8800000000080000888800008880000088800000880000008800000080000000
+-- 211:0888888888888888888888888888888888888888888888888888888888888888
+-- 212:8888888888888888888888888888888888888888888888888888888888888888
+-- 213:8888888888888888888888888888888888888888888888888888888888888888
+-- 214:0000000080000000800000008000000080000000800000008000000080000000
 -- 225:0888888800888880000888000000000000000000000000000000000000000000
+-- 227:0888888808888888008888880088888800088888000088880000088800000008
+-- 228:8888888888888888888888888888888888888888888888888888888888888888
+-- 229:8888888888888888888888808888888088888800888880008888000088000000
+-- 244:0888888800000000000000000000000000000000000000000000000000000000
 -- </TILES>
 
 -- <SPRITES>
