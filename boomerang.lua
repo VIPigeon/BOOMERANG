@@ -709,7 +709,7 @@ end
 
 --
 Player = table.shallow_copy(Body)
-Player.stay_a = Sprite:new(animation_generation({257}), 1)
+Player.stay_a = Sprite:new({257}, 1)
 Player.run_a = Sprite:new(animation_generation({256, 257, 258, 259, 256, 257, 258, 259, 256, 257, 258, 259}), 1)
 Player.death_a = Sprite:new(animation_generation(plr_death_anim()), 1)
 Player.born_a = Sprite:new(table.reverse(animation_generation(plr_death_anim())), 1)
@@ -771,7 +771,7 @@ function Player:update()
 
     if math.abs(self.dx) + math.abs(self.dy) ~= 0 then  -- is moving
         self.last_dx = self.dx; self.last_dy = self.dy
-        if not flag then
+        if not flag or #self.sprite.animation == 1 then
             self.sprite = Player.run_a:copy()
         end
     else
