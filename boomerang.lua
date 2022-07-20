@@ -514,7 +514,7 @@ FirstCartoon = table.shallow_copy(Cartoon)
 INF = 99999999
 function FirstCartoon:new()
     obj = {
-        t = 0, limit = 400,
+        t = 0, limit = 120*2,
         name = 'First',
         flag = false,
         plr = PseudoPlayer:new(-10, 54),
@@ -529,7 +529,7 @@ end
 function FirstCartoon:update()
     if self.t > 0 then
         self.t = self.t + 1
-        if self.t <= 200 then
+        if self.t <= 120 then
             print('BOOMERANG', 90, 53, 8)
         else
             VCROC:draw(108, 54, 0)
@@ -1151,7 +1151,7 @@ Boss.beard_a = boss_beard_anim()
 Boss.attack_modes = {'shotgun', 'minigun', 'mortar'}
 PIXEL = Sprite:new({269}, 1)
 Boss.start_v = 0.4
-Boss.start_hp = 200
+Boss.start_hp = 240
 Boss.sunglasses = Sprite:new({128}, 3)
 Boss.dying_a = Sprite:new(animation_generation({456, 460, 456, 460, 456, 460, 456, 460, 456, 460, 456, 460}), 3)
 
@@ -1247,7 +1247,7 @@ function Boss:attack_update()
     if self.attack_mode == 'shotgun' then
         self.charge = self.charge + 100/10
     elseif self.attack_mode == 'minigun' then
-        self.charge = self.charge + 100/90
+        self.charge = self.charge + 1  -- 100/100
     elseif self.attack_mode == 'mortar' then
         self.charge = self.charge + 100/120
         self.mortar_charge = self.mortar_charge + 1
@@ -1339,7 +1339,7 @@ function Boss:shoot()
     if self.attack_mode == 'shotgun' then
         return Bullet:new(self.x+13, self.y+13, self.px + math.random(-24, 30), self.py + math.random(-24, 30))
     elseif self.attack_mode == 'minigun' then
-        if math.random(0, 5) == 0 then
+        if math.random(0, 3) == 0 then
             return Bullet:new(self.x+13, self.y+13, self.px+math.random(2, 4), self.py+math.random(2, 4))
         end
     elseif self.attack_mode == 'mortar' then
@@ -1361,7 +1361,7 @@ end
 --
 FinalBoss = table.shallow_copy(Boss)
 FinalBoss.scream_a = Boss.dying_a  -- переименовка для читаемости кода
-FinalBoss.start_hp = 320
+FinalBoss.start_hp = 364
 -- FinalBoss.start_hp = 10
 FinalBoss.attack_modes = {'shotgun', 'minigun', 'mortar'}
 function FinalBoss:new(x, y, palette)
@@ -1379,7 +1379,8 @@ function FinalBoss:new(x, y, palette)
         palette = palette,
         negative = false,
         flip = 0,
-        ulta_charge = 0
+        ulta_charge = 0,
+        prelude_flag = false
     }
     -- чистая магия!
     setmetatable(obj, self)
@@ -1421,7 +1422,13 @@ function FinalBoss:ulta_update()
 end
 
 function FinalBoss:prelude_update()
-    if self.x >= 99 then
+    -- if self.x >= 99 then
+    if self.x >= 120 then
+        self.prelude_flag = true
+        self.sprite = Boss.default_a:copy()
+    end
+
+    if self.x <= 100 and self.prelude_flag then
         self.mode = 'ulta'
         self.sprite = FinalBoss.scream_a:copy()
     end
@@ -1497,7 +1504,10 @@ end
 
 function FinalBoss:moving()
     if self.mode == 'prelude' then
-        self.x = self.x + 1
+        if self.prelude_flag then
+            self.x = self.x - 2
+        end
+        self.x = self.x + 1.5
         self.hitbox:set_xy(self.x+4, self.y+4)
         return
     end
@@ -1556,7 +1566,7 @@ function FinalBoss:attack_update()
         return
     end
     if self.attack_mode == 'shotgun' then
-        self.charge = self.charge + 100/76
+        self.charge = self.charge + 100/60
     elseif self.attack_mode == 'minigun' then
         self.charge = self.charge + 100/120
     elseif self.attack_mode == 'mortar' then
@@ -1867,7 +1877,7 @@ end
 
 --
 Game = {}
-ENEMIES_PER_LVL = {2, 2, 4, 6, 0, 3, 0, 0, 4, 0}
+ENEMIES_PER_LVL = {2, 2, 4, 6, 0, 3, 0, 0, 5, 0}
 BOMBERS_PER_LVL = {0, 0, 0, 0, 1, 2, 0, 6, 2, 0}
 COORDS_MENU = {20, 28, 36}
 COORDS_PALETTE_MENU = {20, 28, 36, 44, 52, 60 ,68, 76}
@@ -2381,7 +2391,7 @@ end
 
 
 game = Game:new()
--- game.lvl = 1
+-- game.lvl = 10
 function TIC()
     cls(C0)
     game:update()
